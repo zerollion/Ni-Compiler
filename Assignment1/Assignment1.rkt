@@ -1,5 +1,7 @@
 #lang racket
-         
+
+(provide (all-defined-out))
+
 ; a structure to hold a token, this is used by the lexer
 ; a token type will be 'op, 'lparen, 'rparen, or 'digit or 'eof
 ; repr is a character representation
@@ -24,11 +26,14 @@
 (define (get-next-token input-port)
   (let ([t (read-char input-port)])
     (cond
-      [(cond [(or #\+ #\+) (token 'op t)])]
-      [(eq? (token-type t) 'lparen) (token 'lparen #\()]
-      [(eq? (token-type t) 'rparen) (token 'rparen #\))]
-      [(eq? (token-type t) 'eof) (token 'eof eof)]
-      [(cond [(or #\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9) (token 'digit t)])])))
+      [(or (eq? #\+ t) (eq? #\* t)) (token 'op t)]
+      [(eq? #\( t) (token 'lparen #\()]
+      [(eq? #\) t) (token 'rparen #\))]
+      [(eq? eof t) (token 'eof eof)]
+      [(or (eq? #\0 t) (eq? #\1 t) (eq? #\2 t) (eq? #\3 t)
+           (eq? #\4 t) (eq? #\5 t) (eq? #\6 t) (eq? #\7 t)
+           (eq? #\8 t) (eq? #\9 t)) (token 'digit t)]
+      [else (error "expected a token type, got" t)])))
 
 ; string -> 0 argument function that returns the next token on the string
 ; this function creates a function that uses get-next-token on the string that was passed in,
@@ -43,16 +48,17 @@
 (define (parser lex)
   (let ([t (lex)])
     (cond
-      [(eq? (token-type t) 'eof) (eof)]     ;end of file, return end of file
-      [(eq? (token-type t) 'rparen) (lex)]  ;right parenthese, jump to next char
-      [(eq? (token-type t) 'op) (lex)]      ;operator, jump to next char
-      [(eq? (token-type t) 'digit) (ast-node (token-repr t))]
+      [(eq? (token-type t) 'eof) '()]     ;end of file, return end of file
+      [(eq? (token-type t) 'rparen) (error "not expected a right parenthese")]  ;right parenthese, jump to next char
+      [(eq? (token-type t) 'op) (token-repr t)]      ;operator, jump to next char
+      [(eq? (token-type t) 'digit) (ast-node (string->number (string (token-repr t))))]
       [(eq? (token-type t) 'lparen)
-       (let([left-child (parser lex)]
-            [operator (parser lex)]
-            [right-child (parser lex)]
-            [temp (lex)])
-         (ast-expr-node (operator left-child right-child)))])))
+       (let ([left-child (parser lex)]
+             [operator (parser lex)]
+             [right-child (parser lex)]
+             [temp (lex)])
+         (ast-expr-node operator left-child right-child))]
+      [else (error "expect token types, got" t)])))
 
 ; value node for numbers
 (struct ast-node (val) #:transparent)
@@ -65,7 +71,12 @@
 (define (eval ast)
    (match ast
      ([ast-node v] v)
-     (values v)))
+     ([ast-expr-node op left right]
+       (let ([lchild (eval left)]
+             [rchild (eval right)])
+         (cond
+           [(eq? op #\+) (+ lchild rchild)]
+           [(eq? op #\*) (* lchild rchild)])))))
 
 ; str -> val
 ; takes a string, creates the lexer and parser and then evaluates it

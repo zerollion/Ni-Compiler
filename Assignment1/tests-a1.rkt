@@ -2,7 +2,7 @@
 
 ; import in the test engine stuff, here I assume your assignment file is called a1.rkt
 (require test-engine/racket-tests
-  "a1.rkt")
+  "Assignment1.rkt")
 
 ; checks on the is-token-type? function
 (check-expect (is-token-type? 'op) #t)
