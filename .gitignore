@@ -1,3 +1,5 @@
 *.dep
 *.zo
 *.bak
+Project1 Lexical Analysis/tests/
+Project1 Lexical Analysis/error_tests/
