@@ -74,13 +74,15 @@
    [(eof) (token-EOF)]
    [(:or "\r" "\n" "\t\n" "\n\t") (alexer input-port)]
    ;Strings
-   [(:: #\" (:*(complement #\")) #\" ) (token-STRING lexeme)] 
+   ;[(:: #\" (:*(complement (:or #\" #\\ (:: #\\ alphabetic)))) #\" ) (token-STRING lexeme)]
+   [(:: #\" (:*(complement #\")) #\" ) (token-STRING lexeme)]
    ;identifier
    [(:: alphabetic (:*(:or alphabetic numeric "-" "_" "'"))) (token-ID lexeme)]
    ;int
    [(:+ numeric) (token-NUM lexeme)]
    ;comments
    [(:: "/*" (:*(complement "*/")) "*/" ) (alexer input-port)]
+   [(:: "//" (:*(complement "\n")) "\n" ) (alexer input-port)]
 
   ))
 
@@ -100,10 +102,10 @@
                           [else (cons tok (lexr i))])))])
     (lexr in)))
 
-;(lexfile )
+;(lexfile current-command-line-arguments)
 
 ;test
-#|(check-expect (lexstr "and") (list (token-AND)))
+(check-expect (lexstr "and") (list (token-AND)))
 (check-expect (lexstr "array") (list (token-ARRAY)))
 (check-expect (lexstr "as") (list (token-AS)))
 (check-expect (lexstr "break") (list (token-BREAK)))
@@ -154,10 +156,16 @@
 (check-expect (lexstr "/* Hello
 there */") '())
 
+;new test
+(check-expect (lexstr "// this is a comment \n5+3") (list (token-NUM "5") (token-ADD) (token-NUM "3")))
+(check-expect (lexstr "\"\\\\\"a\"\"") (list (token-STRING "\"\\\\\"") (token-ID "a") (token-STRING "\"\"")))
+(check-expect (lexstr "\"you had me at \\\"hello\\\"\"") (list (token-STRING "\"you had me at \\\"hello\\\"\"")))
+
 (test)
    
 
 ;lexfile filename open-input-file
 ;find . -name \*.ni -exec nic {} \;
+;(current-command-line-arguments) 
 
-(display "Hello World!")|#
+(display "Hello World!")
