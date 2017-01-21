@@ -74,15 +74,18 @@
    [(eof) (token-EOF)]
    [(:or "\r" "\n" "\t\n" "\n\t") (alexer input-port)]
    ;Strings
-   ;[(:: #\" (:*(complement (:or #\" #\\ (:: #\\ alphabetic)))) #\" ) (token-STRING lexeme)]
-   [(:: #\" (:*(complement #\")) #\" ) (token-STRING lexeme)]
+   ;[(:: #\" (:* (complement (:or #\" #\\ (:: #\\ alphabetic)))) #\" ) (token-STRING lexeme)]
+   ;[(:: #\" (:* (char-complement (char-set "\\\""))) #\" ) (token-STRING lexeme)]
+   [(:: #\" (:* (:or (complement (:: #\\ alphabetic)) (char-complement (char-set "\\\"")))) #\") (token-STRING lexeme)]
    ;identifier
-   [(:: alphabetic (:*(:or alphabetic numeric "-" "_" "'"))) (token-ID lexeme)]
+   [(:: alphabetic (:* (:or alphabetic numeric "-" "_" "'"))) (token-ID lexeme)]
    ;int
    [(:+ numeric) (token-NUM lexeme)]
    ;comments
    [(:: "/*" (:*(complement "*/")) "*/" ) (alexer input-port)]
    [(:: "//" (:*(complement "\n")) "\n" ) (alexer input-port)]
+   [(special) (error "unexpected input")]
+   [(special-comment) (error "unexpected input")]
 
   ))
 
@@ -102,7 +105,17 @@
                           [else (cons tok (lexr i))])))])
     (lexr in)))
 
-;(lexfile current-command-line-arguments)
+#|(define read-file
+  (command-line
+   #:args (filename) ; expect one command-line argument: <filename>
+   ; return the argument as a filename to compile
+   filename))
+
+(lexfile (read-file))|#
+
+(provide main)
+(define (main . filename)
+  (lexfile filename))
 
 ;test
 (check-expect (lexstr "and") (list (token-AND)))
@@ -162,10 +175,9 @@ there */") '())
 (check-expect (lexstr "\"you had me at \\\"hello\\\"\"") (list (token-STRING "\"you had me at \\\"hello\\\"\"")))
 
 (test)
-   
+
+(display "Hello World!")
 
 ;lexfile filename open-input-file
 ;find . -name \*.ni -exec nic {} \;
 ;(current-command-line-arguments) 
-
-(display "Hello World!")
