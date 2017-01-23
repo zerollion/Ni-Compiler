@@ -117,7 +117,7 @@
   (let
       ([lst (lexfile filename)])
     (write lst)
-  (printf "Pass Test ~a" filename)))
+  (printf "Pass Test ~a\n" filename)))
 
 (main read-file)
 
