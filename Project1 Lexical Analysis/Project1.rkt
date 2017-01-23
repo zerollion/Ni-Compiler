@@ -75,8 +75,8 @@
    [(:or "\r" "\n" "\t\n" "\n\t") (alexer input-port)]
    ;Strings
    ;[(:: #\" (:* (complement (:or #\" #\\ (:: #\\ alphabetic)))) #\" ) (token-STRING lexeme)]
-   ;[(:: #\" (:* (char-complement (char-set "\\\""))) #\" ) (token-STRING lexeme)]
-   [(:: #\" (:* (:or (complement (:: #\\ alphabetic)) (char-complement (char-set "\\\"")))) #\") (token-STRING lexeme)]
+   [(:: #\" (:* (:or (:: #\\ any-char) (char-complement (char-set "\"\\")))) #\" ) (token-STRING lexeme)]
+   ;[(:: #\" (:* (:or (complement (:: #\\ alphabetic)) (char-complement (char-set "\\\"")))) #\") (token-STRING lexeme)]
    ;identifier
    [(:: alphabetic (:* (:or alphabetic numeric "-" "_" "'"))) (token-ID lexeme)]
    ;int
@@ -84,8 +84,7 @@
    ;comments
    [(:: "/*" (:*(complement "*/")) "*/" ) (alexer input-port)]
    [(:: "//" (:*(complement "\n")) "\n" ) (alexer input-port)]
-   [(special) (error "unexpected input")]
-   [(special-comment) (error "unexpected input")]
+   [any-char (error "unexpected input")]
 
   ))
 
@@ -105,20 +104,25 @@
                           [else (cons tok (lexr i))])))])
     (lexr in)))
 
-#|(define read-file
+(define read-file
   (command-line
    #:args (filename) ; expect one command-line argument: <filename>
    ; return the argument as a filename to compile
    filename))
 
-(lexfile (read-file))|#
+;(lexfile (read-file))
 
 (provide main)
-(define (main . filename)
-  (lexfile filename))
+(define (main filename)
+  (let
+      ([lst (lexfile filename)])
+    (write lst)
+  (printf "Pass Test ~a" filename)))
+
+(main read-file)
 
 ;test
-(check-expect (lexstr "and") (list (token-AND)))
+#|(check-expect (lexstr "and") (list (token-AND)))
 (check-expect (lexstr "array") (list (token-ARRAY)))
 (check-expect (lexstr "as") (list (token-AS)))
 (check-expect (lexstr "break") (list (token-BREAK)))
@@ -176,8 +180,7 @@ there */") '())
 
 (test)
 
-(display "Hello World!")
+(display "Hello World!")|#
 
-;lexfile filename open-input-file
 ;find . -name \*.ni -exec nic {} \;
 ;(current-command-line-arguments) 
