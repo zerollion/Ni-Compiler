@@ -1,5 +1,8 @@
 #lang racket
 
+;Tan Zhen COMP4704
+;compiled program takes a path/filename as argument in cmd
+
 (require racket/cmdline)
 (require parser-tools/lex
          parser-tools/yacc
@@ -74,16 +77,15 @@
    [(eof) (token-EOF)]
    [(:or "\r" "\n" "\t\n" "\n\t") (alexer input-port)]
    ;Strings
-   ;[(:: #\" (:* (complement (:or #\" #\\ (:: #\\ alphabetic)))) #\" ) (token-STRING lexeme)]
    [(:: #\" (:* (:or (:: #\\ any-char) (char-complement (char-set "\"\\")))) #\" ) (token-STRING lexeme)]
-   ;[(:: #\" (:* (:or (complement (:: #\\ alphabetic)) (char-complement (char-set "\\\"")))) #\") (token-STRING lexeme)]
    ;identifier
    [(:: alphabetic (:* (:or alphabetic numeric "-" "_" "'"))) (token-ID lexeme)]
    ;int
    [(:+ numeric) (token-NUM lexeme)]
    ;comments
-   [(:: "/*" (:*(complement "*/")) "*/" ) (alexer input-port)]
-   [(:: "//" (:*(complement "\n")) "\n" ) (alexer input-port)]
+   [(:: "/*" (complement (:: (:* any-char) "*/" (:* any-char))) "*/" ) (alexer input-port)]
+   ;[(:: "/*" (:* (char-complement (char-set "*/"))) "*/" ) (alexer input-port)]
+   [(:: "//" (:* (char-complement #\newline)) "\n" ) (alexer input-port)]
    [any-char (error "unexpected input")]
 
   ))
@@ -109,8 +111,6 @@
    #:args (filename) ; expect one command-line argument: <filename>
    ; return the argument as a filename to compile
    filename))
-
-;(lexfile (read-file))
 
 (provide main)
 (define (main filename)
@@ -178,9 +178,10 @@ there */") '())
 (check-expect (lexstr "\"\\\\\"a\"\"") (list (token-STRING "\"\\\\\"") (token-ID "a") (token-STRING "\"\"")))
 (check-expect (lexstr "\"you had me at \\\"hello\\\"\"") (list (token-STRING "\"you had me at \\\"hello\\\"\"")))
 
+(check-expect (lexstr "/* ******** */ asd /* asd */") (list (token-ID "asd")))
+
 (test)
 
 (display "Hello World!")|#
 
-;find . -name \*.ni -exec nic {} \;
-;(current-command-line-arguments) 
+;Get-Childitem .\tests\ -name .\*.ni | Foreach {.\Project1.exe .\tests\$_}
