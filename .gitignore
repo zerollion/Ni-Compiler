@@ -3,3 +3,5 @@
 *.bak
 Project1 Lexical Analysis/tests/
 Project1 Lexical Analysis/error_tests/
+Project2 Parsing/error_tests/
+Project2 Parsing/tests/
