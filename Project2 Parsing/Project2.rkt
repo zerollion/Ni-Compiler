@@ -89,6 +89,9 @@
     (expr
      [(token) $1]
      [(MathEx) $1]
+     [(vardecl) $1]
+     [(typedecl) $1]
+     [(rctypedecl) $1]
      )
     
     (token
@@ -97,27 +100,58 @@
      [(ID) (VarExpr $1)]
      )
 
+    ;1.Varaible Declarations
+    (vardecl
+     [(NI ID IS expr) (VarDecl #f $2 $4)]
+     [(NI ID ID IS expr) (VarDecl $2 $3 $5)]
+     )
+    ;2.Data type Declarations
+    (rctypedecl
+     [(typedecl) $1]
+     [(typedecl AND rctypedecl)
+      (match $1
+        [(NameType name kind next) (NameType name kind $3)]
+        [(RecordType name kind next) (RecordType name kind $3)]
+        [(ArrayType name kind next) (ArrayType name kind $3)]
+        )]
+     )
+    (typedecl
+     [(DEFINE ID KIND AS ID) (NameType $2 $5 #f)]
+     [(DEFINE ID KIND AS LBRACE typefiels RBRACE) (RecordType $2 $6 #f)]
+     [(DEFINE ID KIND AS ARRAY OF ID) (ArrayType $2 $7 #f)]
+     )
+    (typefiels
+     [(typeEx) (list $1)]
+     [(typeEx COMMA typefiels) (cons $1 $3)]
+     )
+    (typeEx
+     [(ID ID) (TypeField $1 $2)]
+     )
+    
+    ;Math Expressions
     (MathEx
      [(MathEx ADD MathTerm) (MathExpr $1 '+ $3)]
      [(MathEx SUB MathTerm) (MathExpr $1 '- $3)]
+     [(SUB MathEx) (MathExpr (NumExpr 0) '- $2)]
      [(MathTerm) $1]
      )
-
     (MathTerm
      [(MathTerm MULT MathFact) (MathExpr $1 '* $3)]
      [(MathTerm DIV MathFact) (MathExpr $1 '/ $3)]
      [(MathFact) $1]
      )
-
     (MathFact
      [(NUM DOT NUM) (MathExpr $1 #\. $3)]
      [(token) $1]
      [(LPAREN MathEx RPAREN) $2]
      )
+    ;-----------------------------------------
     
     )
    
    ))
+
+;(check-expect (parse-str "pt.x")(list (RecordExpr (VarExpr "pt") "x")))
 
 ;utiliy functions
 (define (lex-procedure in)
