@@ -313,7 +313,7 @@
     (aparser (lex-procedure in))))
 
 (define (parse-file filename)
-  (parse-file "\tests\test01.ni")(let ([in (open-input-file filename)])
+  (let ([in (open-input-file filename)])
     (port-count-lines! in)
     (aparser (lex-procedure in))))
 
