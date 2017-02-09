@@ -7,6 +7,7 @@
          (prefix-in lex: parser-tools/lex)
          parser-tools/cfg-parser
          parser-tools/yacc)
+(require test-engine/racket-tests)
 
 (provide (all-defined-out))
 
@@ -65,9 +66,13 @@
 (struct AssignmentExpr (name expr) #:transparent)
 ; break expression--this has no arguments
 (struct BreakExpr () #:transparent)
+; peng expression
+(struct PengExpr () #:transparent)
 ; with expression (think: for expression)
 (struct WithExpr (idname initexpr fromexpr toexpr) #:transparent)
 ;---------------------------------------------------------------------
+
+(define rewrite-with (make-parameter false))
 
 (define aparser
   (cfg-parser
@@ -83,21 +88,44 @@
 
     (program
      [(expr) (list $1)]
-     [(expr program) (cons $1 $2)]
      )
 
     (expr
      [(token) $1]
-     [(MathEx) $1]
      [(vardecl) $1]
      [(typedecl) $1]
      [(rctypedecl) $1]
+     [(fundecl) $1]
+     [(lvalue) $1]
+     [(funcall) $1]
+     [(letexpr) $1]
+     [(sqexpr) $1]
+     [(MathEx) $1]
+     [(LogicEx) $1]
+     [(BoolEx) $1]
+     [(newrec) $1]
+     [(newarr) $1]
+     [(AssignEx) $1]
+     [(ifEx) $1]
+     [(whileEx) $1]
+     [(withEx) $1]
+     [(breakEx) $1]
+     [(pengEx) $1]
+     )
+    ;sequence of expressions
+    (sqexpr
+     [(LPAREN Exprs RPAREN) $2]
+     )
+    (Exprs
+     [(expr SEMI expr) (list $1 $3)]
+     [(expr SEMI Exprs) (cons $1 $3)]
      )
     
     (token
-     [(NUM) (NumExpr $1)]
+     [(NUM) (NumExpr $1)] 
      [(STRING)(StringExpr $1)]
      [(ID) (VarExpr $1)]
+     [(noval) $1]
      )
 
     ;1.Varaible Declarations
@@ -111,28 +139,82 @@
      [(typedecl AND rctypedecl)
       (match $1
         [(NameType name kind next) (NameType name kind $3)]
-        [(RecordType name kind next) (RecordType name kind $3)]
+        [(RecordType name field next) (RecordType name field $3)]
         [(ArrayType name kind next) (ArrayType name kind $3)]
         )]
      )
     (typedecl
-     [(DEFINE ID KIND AS ID) (NameType $2 $5 #f)]
-     [(DEFINE ID KIND AS LBRACE typefiels RBRACE) (RecordType $2 $6 #f)]
-     [(DEFINE ID KIND AS ARRAY OF ID) (ArrayType $2 $7 #f)]
+     [(DEFINE ID KIND AS ID) (NameType $2 $5 '())]
+     [(DEFINE ID KIND AS LBRACE typefiels RBRACE) (RecordType $2 $6 '())]
+     [(DEFINE ID KIND AS LBRACE RBRACE) (RecordType $2 '() '())]
+     [(DEFINE ID KIND AS ARRAY OF ID) (ArrayType $2 $7 '())]
      )
     (typefiels
      [(typeEx) (list $1)]
      [(typeEx COMMA typefiels) (cons $1 $3)]
      )
     (typeEx
-     [(ID ID) (TypeField $1 $2)]
+     [(ID ID) (TypeField $2 $1)]
      )
+    ;3.Function declarations
+    (fundecl
+     [(NEEWOM ID LPAREN typefiels RPAREN IS expr) (FunDecl $2 $4 '() $7 '())]
+     [(NEEWOM ID LPAREN typefiels RPAREN AS ID IS expr) (FunDecl $2 $4 $7 $9 '())]
+     [(NEEWOM ID LPAREN typefiels RPAREN IS expr AND fundecl) (FunDecl $2 $4 '() $7 $9)]
+     [(NEEWOM ID LPAREN typefiels RPAREN AS ID IS expr AND fundecl) (FunDecl $2 $4 $7 $9 $11)]
+     ;no arguments
+     [(NEEWOM ID LPAREN RPAREN IS expr) (FunDecl $2 '() '() $6 '())]
+     [(NEEWOM ID LPAREN RPAREN AS ID IS expr) (FunDecl $2 '() $6 $8 '())]
+     [(NEEWOM ID LPAREN RPAREN IS expr AND fundecl) (FunDecl $2 '() '() $6 $8)]
+     [(NEEWOM ID LPAREN RPAREN AS ID IS expr AND fundecl) (FunDecl $2 '() $6 $8 $10)]
+     )
+     #|(rcfundecl
+     [(fundecl) $1]
+     [(fundecl AND rcfundecl)
+      (match $1
+        [(FunDecl name args rettype body next) (FunDecl name args rettype body $3)]
+       )]
+     )|#
     
-    ;Math Expressions
+    ;4.1 Local variables
+    (lvalue
+     [(token) $1]
+     [(lvalue DOT ID) (RecordExpr $1 $3)]
+     [(lvalue LBRACKET expr RBRACKET) (ArrayExpr $1 $3)]
+     )
+    ;4.2 function call
+    (funcall
+     [(ID LPAREN RPAREN) (FuncallExpr $1 #f)]
+     [(ID LPAREN args RPAREN) (FuncallExpr $1 $3)]
+     )
+    (args
+     [(expr) (list $1)]
+     [(expr COMMA args) (cons $1 $3)]
+     )
+    ;4.3 no value
+    (noval
+     [(LPAREN RPAREN) (NoVal)]
+     )
+    ;4.4 let expressions
+    (letexpr
+     [(LET declarations IN END) (LetExpr $2 '())]
+     [(LET declarations IN expr END) (LetExpr $2 (list $4))]
+     [(LET declarations IN Exprs END) (LetExpr $2 $4)]
+     )
+    (declarations
+     [(decl) (list $1)]
+     [(decl declarations) (cons $1 $2)]
+     )
+    (decl
+     [(vardecl) $1]
+     [(fundecl) $1]
+     [(rctypedecl) $1]
+     )
+    ;4.5 Math Expressions
     (MathEx
      [(MathEx ADD MathTerm) (MathExpr $1 '+ $3)]
      [(MathEx SUB MathTerm) (MathExpr $1 '- $3)]
-     [(SUB MathEx) (MathExpr (NumExpr 0) '- $2)]
+     [(SUB MathEx) (MathExpr (NumExpr "0") '- $2)]
      [(MathTerm) $1]
      )
     (MathTerm
@@ -141,17 +223,85 @@
      [(MathFact) $1]
      )
     (MathFact
-     [(NUM DOT NUM) (MathExpr $1 #\. $3)]
-     [(token) $1]
+     ;[(NUM DOT NUM) (MathExpr $1 #\. $3)]
      [(LPAREN MathEx RPAREN) $2]
+     [(token) $1]
      )
-    ;-----------------------------------------
+    ;4.6 Bool Expressions
+    (BoolEx
+     [(BoolEx EQ BoolTerm) (BoolExpr $1 'eq $3)]
+     [(BoolEx NE BoolTerm) (BoolExpr $1 '<> $3)]
+     [(BoolEx LT BoolTerm) (BoolExpr $1 '< $3)]
+     [(BoolEx GT BoolTerm) (BoolExpr $1 '> $3)]
+     [(BoolEx LE BoolTerm) (BoolExpr $1 '<= $3)]
+     [(BoolEx GE BoolTerm) (BoolExpr $1 '>= $3)]
+     [(BoolTerm) $1]
+     )
+    (BoolTerm
+     [(LPAREN BoolEx RPAREN) $2]
+     [(LogicEx) $1]
+     )
+
+    ;4.7 Logic Expressions
+    (LogicEx
+     [(LogicEx BOOLOR LogicTerm) (LogicExpr  $1 'or $3)]
+     [(LogicEx BOOLAND LogicTerm) (LogicExpr  $1 'and $3)]
+     [(LogicTerm) $1]
+     )
+    (LogicTerm
+     [(LPAREN LogicEx RPAREN) $2]
+     [(MathEx) $1]
+     )
+    ;5.1 creating a new record
+    (newrec
+     [(ID LBRACE RBRACE) (NewRecordExpr $1 #f)]
+     [(ID LBRACE fieldassigns RBRACE) (NewRecordExpr $1 $3)]
+     )
+    (fieldassigns
+     [(fieldassign) (list $1)]
+     [(fieldassign COMMA fieldassigns) (cons $1 $3)]
+     )
+    (fieldassign
+     [(ID IS expr) (FieldAssign $1 $3)]
+     )
+    ;5.2 creating a new array
+    (newarr
+     [(ID LBRACKET expr RBRACKET OF expr) (NewArrayExpr $1 $3 $6)]
+     )
+    ;6 Assignment expression
+    (AssignEx
+     [(NOW lvalue IS expr) (AssignmentExpr $2 $4)]
+     )
+    ;7 If expression
+    (ifEx
+     [(IF expr THEN expr END) (IfExpr $2 $4 #f)]
+     [(IF expr THEN expr ELSE expr END) (IfExpr $2 $4 $6)]
+     )
+    ;8 While expression
+    (whileEx
+     [(WHILE expr DO expr END) (WhileExpr $2 $4)]
+     )
+    ;9 with expression
+    (withEx
+     [(WITH ID AS expr TO expr DO expr END)
+      (if (rewrite-with) ;test
+          ;then
+          '()
+          ;else
+          (WithExpr $2 $4 $6 $8))]
+     )
+    ;10 break expression
+    (breakEx
+     [(BREAK) (BreakExpr)]
+     )
+    ;11 peng expression
+    (pengEx
+     [(PENG) (PengExpr)]
+     )
     
     )
    
    ))
-
-;(check-expect (parse-str "pt.x")(list (RecordExpr (VarExpr "pt") "x")))
 
 ;utiliy functions
 (define (lex-procedure in)
@@ -163,6 +313,73 @@
     (aparser (lex-procedure in))))
 
 (define (parse-file filename)
-  (let ([in (open-input-file filename)])
+  (parse-file "\tests\test01.ni")(let ([in (open-input-file filename)])
     (port-count-lines! in)
     (aparser (lex-procedure in))))
+
+;-------------------------- main ------------------------------------
+#|(define read-file
+  (command-line
+   #:once-each
+   [("-r" "-rewritten") "rewrite with loop as while" (rewrite-with true)]
+   #:args (filename) ; expect one command-line argument: <filename>
+   ; return the argument as a filename to compile
+   filename))
+
+(provide main)
+(define (main filename)
+  (let
+      ([lst (parse-file filename)])
+    (write lst)
+  (printf "Pass Test ~a\n" filename)))
+
+(main read-file)|#
+
+;----------------------------check expects-----------------------------
+#|(check-expect (parse-str "pt.x")(list (RecordExpr (VarExpr "pt") "x")))
+; var declarations
+(check-expect (parse-str "ni x is 5") (list (VarDecl #f "x" (NumExpr "5"))))
+; type declarations
+(check-expect (parse-str "define int2 kind as int") (list (NameType "int2" "int" '())))
+(check-expect (parse-str "define intarr kind as array of int") (list (ArrayType "intarr" "int" '())))
+(check-expect (parse-str "define intrec kind as { int x }")
+              (list (RecordType "intrec" (list (TypeField "x" "int")) '())))
+; function declarations
+(check-expect (parse-str "neewom getX() as int is 5")
+              (list (FunDecl "getX" '() "int" (NumExpr "5") '())))
+; function calls of various sorts
+(check-expect (parse-str "add2(5)") (list (FuncallExpr "add2" (list (NumExpr "5")))))
+; parens
+(check-expect (parse-str "(5)") (list (NumExpr "5")))
+; various sequences
+(check-expect (parse-str "(6; 5)") (list (list (NumExpr "6") (NumExpr "5"))))
+; strings
+(check-expect (parse-str "\"Hello World\"") (list (StringExpr "\"Hello World\"")))
+; noval
+(check-expect (parse-str "()") (list (NoVal)))
+; let expressions
+(check-expect (parse-str "let ni x is 5 in x end")
+              (list (LetExpr (list (VarDecl #f "x" (NumExpr "5"))) (list (VarExpr "x")))))
+; math ops
+(check-expect (parse-str "1+2")
+              (list (MathExpr (NumExpr "1") '+ (NumExpr "2"))))
+; math ops using negated numbers
+(check-expect (parse-str "-5") (list (MathExpr (NumExpr "0") '- (NumExpr "5"))))
+
+; bool expressions
+(check-expect (parse-str "5=6") (list (BoolExpr (NumExpr "5") 'eq (NumExpr "6"))))
+
+; array creation
+(check-expect (parse-str "intarr[10] of 6")
+              (list (NewArrayExpr "intarr" (NumExpr "10") (NumExpr "6"))))
+
+; record expression
+(check-expect (parse-str "point { x is 6 }")
+              (list (NewRecordExpr "point" (list (FieldAssign "x" (NumExpr "6"))))))
+;--------------------------------------------------------------------
+(test)|#
+
+
+
+;(make-dot-file (parse-str "5") "out.dot")
+;Get-Childitem .\tests\ -name .\*.ni | Foreach {.\Project1.exe .\tests\$_}

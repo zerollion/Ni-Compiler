@@ -1,5 +1,5 @@
 #lang racket
-(require "niparser.rkt")
+(require "Project2.rkt")
 (require 2htdp/image)
 
 (define count 0)
@@ -32,8 +32,6 @@
                              (fprintf body "~a -> " nodename)
                              (match-ast rest nodename))))]
                        
-                                            
-                            
                     [(VarExpr name) (let ([nodeval (next-node)])
                                       (fprintf preamble "~a [label=\"~a\"];~n" nodename "VarExpr")
                                       (fprintf preamble "~a [label=\"~a\"];~n" nodeval name)
@@ -132,10 +130,12 @@
                             
                     [(FuncallExpr name args)
                      (let ()
-                       (fprintf preamble "~a [label=\"~a\"];~n" nodename name)
-                       (for-each (λ (arg)
-                                   (fprintf body "~a -> " nodename)
-                                   (match-ast arg nodename)) args))]
+                       (fprintf preamble "~a [label=\"Funcall: ~a\"];~n" nodename name)
+                       (if (> (length args) 0)
+                           (for-each (λ (arg)
+                                       (fprintf body "~a -> " nodename)
+                                       (match-ast arg nodename)) args)
+                           (fprintf body "~a;~n" nodename)))]
                                
                     [(ArrayExpr name expr)
                      (begin
@@ -290,7 +290,7 @@
   (let ([out (open-output-file filename #:mode 'text #:exists 'replace)])
     (generate-dot ast out)
     (close-output-port out)
-    (system (string-append "export PATH=$PATH:/usr/local/bin; dot -Tpng " filename " -o " filename ".png"))
+    (system (string-append "\"D:/Program Files (x86)/Graphviz2.38/bin/dot.exe\" -Tpng " filename " -o " filename ".png"))
     (bitmap/file (string-append filename ".png"))))
 
 ; takes the name of a file to process and produces a dot file using
