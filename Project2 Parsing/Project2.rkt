@@ -286,7 +286,9 @@
      [(WITH ID AS expr TO expr DO expr END)
       (if (rewrite-with) ;test
           ;then
-          '()
+          (let ([body (list* $8 (list (MathExpr (VarExpr $2) '+ (NumExpr "1"))))])
+            (LetExpr (list (VarDecl "int" $2 $4))
+                     (list (WhileExpr (BoolExpr (VarExpr $2) '<= $6) body))))
           ;else
           (WithExpr $2 $4 $6 $8))]
      )
@@ -318,10 +320,10 @@
     (aparser (lex-procedure in))))
 
 ;-------------------------- main ------------------------------------
-#|(define read-file
+(define read-file
   (command-line
    #:once-each
-   [("-r" "-rewritten") "rewrite with loop as while" (rewrite-with true)]
+   [("-rewrite" "--r") "rewrite with loop as while" (rewrite-with true)]
    #:args (filename) ; expect one command-line argument: <filename>
    ; return the argument as a filename to compile
    filename))
@@ -333,7 +335,7 @@
     (write lst)
   (printf "Pass Test ~a\n" filename)))
 
-(main read-file)|#
+(main read-file)
 
 ;----------------------------check expects-----------------------------
 #|(check-expect (parse-str "pt.x")(list (RecordExpr (VarExpr "pt") "x")))
