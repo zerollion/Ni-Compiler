@@ -72,6 +72,9 @@
 ; with expression (think: for expression)
 (struct WithExpr (idname initexpr fromexpr toexpr) #:transparent)
 ;---------------------------------------------------------------------
+; struct for comment
+(struct LineComment (word) #:transparent)
+(struct BlockComment (word) #:transparent)
 
 (define rewrite-with (make-parameter false))
 
@@ -80,7 +83,7 @@
    (src-pos)
    (start program)
    (end EOF)
-   (tokens value-tokens paren-types operators punctuation comparators boolops keywords endoffile)
+   (tokens value-tokens paren-types operators punctuation comparators boolops keywords endoffile comment)
    (error (lambda (tok-ok? tok-name tok-value start-pos end-pos)
             (if (and (eq? tok-ok? #t) (eq? tok-name 'EOF)) '()
                 (printf "Parsing error at line ~a, col ~a: token: ~a, value: ~a, tok-ok? ~a\n"
@@ -89,6 +92,7 @@
 
     (program
      [(expr) (list $1)]
+     [(reccomm expr) (list $1 $2)]
      )
 
     (expr
@@ -112,6 +116,8 @@
      [(withEx) $1]
      [(breakEx) $1]
      [(pengEx) $1]
+     [(reccomm) $1]
+     [(reccomm expr) (if (list? $2) (cons $1 $2) (list $1 $2))]
      )
     ;sequence of expressions
     (sqexpr
@@ -204,6 +210,8 @@
      )
     (declarations
      [(decl) (list $1)]
+     [(comm decl) (list $1 $2)]
+     [(comm declarations) (cons $1 $2)]
      [(decl declarations) (cons $1 $2)]
      )
     (decl
@@ -301,6 +309,15 @@
     ;11 peng expression
     (pengEx
      [(PENG) (PengExpr)]
+     )
+    ;12 comment
+    (reccomm
+     [(comm) $1]
+     [(comm reccomm) (if (list? reccomm) (cons $1 $2) (cons $1 (list $2)))]
+     )
+    (comm
+     [(BCOMMENT) (BlockComment $1)]
+     [(LCOMMENT) (LineComment $1)]
      )
     
     )

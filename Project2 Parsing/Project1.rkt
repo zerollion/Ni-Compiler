@@ -1,6 +1,7 @@
 #lang racket
 
 ;Tan Zhen COMP4704
+;with commentator
 
 (require racket/cmdline)
 (require parser-tools/lex
@@ -16,6 +17,7 @@
 (define-empty-tokens punctuation (COMMA COLON SEMI))
 (define-empty-tokens comparators (EQ NE LT GT LE GE))
 (define-empty-tokens boolops (BOOLOR BOOLAND))
+(define-tokens comment (BCOMMENT LCOMMENT))
 
 (define-empty-tokens keywords (AND ARRAY AS BREAK DEFINE DO ELSE END IF IN IS
  JUNIPER KIND LET NEEWOM NI NOW OF PENG THEN TO WHILE WITH))
@@ -83,9 +85,9 @@
    ;int
    [(:+ numeric) (token-NUM lexeme)]
    ;comments
-   [(:: "/*" (complement (:: (:* any-char) "*/" (:* any-char))) "*/" ) (return-without-pos (alexer input-port))]
+   [(:: "/*" (complement (:: (:* any-char) "*/" (:* any-char))) "*/" ) (token-BCOMMENT lexeme)]
    ;[(:: "/*" (:* (char-complement (char-set "*/"))) "*/" ) (alexer input-port)]
-   [(:: "//" (:* (char-complement #\newline)) "\n" ) (return-without-pos (alexer input-port))]
+   [(:: "//" (:* (char-complement #\newline)) "\n" ) (token-LCOMMENT lexeme)]
    [any-char (error "unexpected input")]
 
   ))
