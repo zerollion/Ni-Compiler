@@ -2,6 +2,7 @@
 
 ;Tan Zhen 872692777
 ;Project2 Parsing
+;use command-line flag -r to rewrite "with-loop" as "while loop"
 
 (require "Project1.rkt"
          (prefix-in lex: parser-tools/lex)
@@ -225,6 +226,7 @@
     (MathFact
      ;[(NUM DOT NUM) (MathExpr $1 #\. $3)]
      [(LPAREN MathEx RPAREN) $2]
+     [(expr) $1]
      [(token) $1]
      )
     ;4.6 Bool Expressions
@@ -323,7 +325,8 @@
 (define read-file
   (command-line
    #:once-each
-   [("-rewrite" "--r") "rewrite with loop as while" (rewrite-with true)]
+   [("-r") "rewrite with-loop as while"
+                        (rewrite-with true)]
    #:args (filename) ; expect one command-line argument: <filename>
    ; return the argument as a filename to compile
    filename))
@@ -384,4 +387,4 @@
 
 
 ;(make-dot-file (parse-str "5") "out.dot")
-;Get-Childitem .\tests\ -name .\*.ni | Foreach {.\Project1.exe .\tests\$_}
+;Get-Childitem .\tests\ -name .\*.ni | Foreach {.\Project2.exe .\tests\$_}

@@ -90,21 +90,32 @@
 
   ))
 
-(define (lexstr str)
-  (letrec ([in (open-input-string str)]
-           [lexr
-            (λ (i) (let ([tok (alexer i)])
-                    (cond [(eq? tok (token-EOF)) '()]
-                          [else (cons tok (lexr i))])))])
-    (lexr in)))
+; input port -> list of tokens
+; lex takes an input port and returns a list of tokens by lexing the input port
+(define (lex in)
+  ; this doesn't necessarily need to be internal
+  (letrec ([lexfun
+            (λ () (let ([tok (alexer in)])
+                     ; test to see if equal to eof and return empty list
+                     (cond [(eq? (position-token-token tok) (token-EOF)) '()]
+                           ; otherwise append token to eval of rest of tokens
+                           [else (cons (position-token-token tok) (lexfun))])))])
+    (lexfun)))
 
+
+; string -> list of tokens
+; lexstr takes a string and returns a list of tokens by lexing the given string
+(define (lexstr str)
+  (let ([in (open-input-string str)])
+    (port-count-lines! in)
+    (lex in)))
+
+; filename -> list of tokens
+; lexfile opens the input port on the filename and then lexes its contents
 (define (lexfile filename)
-  (letrec ([in (open-input-file filename)]
-           [lexr
-            (λ (i) (let ([tok (alexer i)])
-                    (cond [(eq? tok (token-EOF)) '()]
-                          [else (cons tok (lexr i))])))])
-    (lexr in)))
+  (let ([in (open-input-file filename)])
+    (port-count-lines! in)
+    (lex in)))
 
 #|(define read-file
   (command-line
