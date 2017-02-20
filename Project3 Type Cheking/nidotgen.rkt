@@ -1,5 +1,5 @@
 #lang racket
-(require "Project2.rkt")
+(require "NIparser.rkt")
 (require 2htdp/image)
 
 (define count 0)

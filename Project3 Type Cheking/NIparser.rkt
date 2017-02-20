@@ -3,8 +3,12 @@
 ;Tan Zhen 872692777
 ;Project2 Parsing
 ;use command-line flag -r to rewrite "with-loop" as "while loop"
+;math precedence fixed
 
-(require "Project1.rkt"
+;(make-dot-file (parse-str "5") "out.dot")
+;Get-Childitem .\tests\ -name .\*.ni | Foreach {.\NIparser.exe .\tests\$_}
+
+(require "NIlexer.rkt"
          (prefix-in lex: parser-tools/lex)
          parser-tools/cfg-parser
          parser-tools/yacc)
@@ -105,9 +109,9 @@
      [(funcall) $1]
      [(letexpr) $1]
      [(sqexpr) $1]
-     [(MathEx) $1]
+     ;[(MathEx) $1]
      [(LogicEx) $1]
-     [(BoolEx) $1]
+     ;[(BoolEx) $1]
      [(newrec) $1]
      [(newarr) $1]
      [(AssignEx) $1]
@@ -191,7 +195,7 @@
      )
     ;4.2 function call
     (funcall
-     [(ID LPAREN RPAREN) (FuncallExpr $1 #f)]
+     [(ID LPAREN RPAREN) (FuncallExpr $1 '())]
      [(ID LPAREN args RPAREN) (FuncallExpr $1 $3)]
      )
     (args
@@ -234,7 +238,7 @@
     (MathFact
      ;[(NUM DOT NUM) (MathExpr $1 #\. $3)]
      [(LPAREN MathEx RPAREN) $2]
-     ;[(expr) $1]
+     [(expr) $1]
      [(token) $1]
      )
     ;4.6 Bool Expressions
@@ -249,7 +253,7 @@
      )
     (BoolTerm
      [(LPAREN BoolEx RPAREN) $2]
-     [(LogicEx) $1]
+     [(MathEx) $1]
      )
 
     ;4.7 Logic Expressions
@@ -260,7 +264,7 @@
      )
     (LogicTerm
      [(LPAREN LogicEx RPAREN) $2]
-     [(MathEx) $1]
+     [(BoolEx) $1]
      )
     ;5.1 creating a new record
     (newrec
@@ -356,7 +360,3 @@
   (printf "Pass Test ~a\n" filename)))
 
 (main read-file)|#
-
-
-;(make-dot-file (parse-str "5") "out.dot")
-;Get-Childitem .\tests\ -name .\*.ni | Foreach {.\Project2.exe .\tests\$_}
