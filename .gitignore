@@ -11,3 +11,7 @@ Project2 Parsing/out.dot.png
 *.exe
 *.out
 Project2 Parsing/out.out.png
+Project3 Type Cheking/error_tests/
+Project3 Type Cheking/tests/
+*.dot
+*.png
