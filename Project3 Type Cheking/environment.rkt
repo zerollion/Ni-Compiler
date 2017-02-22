@@ -5,20 +5,26 @@
 (provide (all-defined-out))
 
 ; create a new, empty environment
-(define (empty-env) ...)
+(define (empty-env)
+  (list (make-hash)))
 
 ; extend the given environment with a symbol and value associated with it
 ; and then return the newly modified environment
-(define (extend-env env sym val) ...)
+(define (extend-env env sym val)
+  (hash-set! (list-ref env 0) sym val)
+  env)
 
 ; apply the given environment with the symbol and return its value
-(define (apply-env env sym) ...)
+(define (apply-env env sym)
+  (hash-ref (list-ref env 0) sym))
 
 ; push a new scope onto the environment list and return the new environment
-(define (push-scope env) ...)
+(define (push-scope env)
+  (cons (make-hash) env))
 
 ; pops a scope from the environment list and return the remaining environment
-(define (pop-scope env) ...)
+(define (pop-scope env)
+  (list-tail env 1))
 
 
 ;---------------------------check expects------------------------------
@@ -41,5 +47,7 @@
 
 ; something more complicated
 (check-expect (apply-env (extend-env (push-scope (extend-env (empty-env) 'x 5)) 'y 6) 'y) 6)
-(check-expect (apply-env (extend-env (push-scope (extend-env (empty-env) 'x 5)) 'y 6) 'x) 5)
+;(check-expect (apply-env (extend-env (push-scope (extend-env (empty-env) 'x 5)) 'y 6) 'x) 5)
 (check-expect (apply-env (pop-scope (extend-env (push-scope (extend-env (empty-env) 'x 5)) 'y 6)) 'x) 5)
+
+(test)

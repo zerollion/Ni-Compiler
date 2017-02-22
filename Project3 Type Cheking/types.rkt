@@ -1,5 +1,7 @@
 #lang racket
 
+(provide (all-defined-out))
+
 ; types for Ni
 (struct NiType (actual) #:transparent
  #:guard (λ (actual typename)
