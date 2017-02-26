@@ -16,6 +16,40 @@
 
 (provide (all-defined-out))
 
+;--------------annotation functions by Chris-----------------
+; build up a set of annotations on the nodes, this separates out
+; this info so that we can more easily write check-expects on the
+; correct structure of the AST--note we use a hasheq instead of a
+; hash because we need to know just exactly if two objects are eq?
+; not equal? (the later would be structure equality, and we
+; need to map information per object)
+(define annotations (make-parameter (make-hasheq)))
+
+; we can add notes to a node with a symbol and a value
+; generally, the sym should be something like 'position, or 'type
+(define (add-note node sym item)
+  (let ([notes (if (hash-has-key? (annotations) node)
+                (hash-ref (annotations) node)
+                (let ([newhash (make-hash)])
+                  (hash-set! (annotations) node newhash)
+                  newhash))])
+    (hash-set! notes sym item)))
+
+; this retrieves a note on a node from the annotations 
+(define (get-note node sym)
+  (if (hash-has-key? (annotations) node)
+      (let ([node-ht (hash-ref (annotations) node)])
+        (if (hash-has-key? node-ht sym)
+            (hash-ref node-ht sym)
+            (let ([errorstr (open-output-string)])
+              (fprintf errorstr "Unable to find ~a as an annotation for ~a~n"
+                       sym node)
+              (error (get-output-string errorstr)))))
+        (let ([errorstr (open-output-string)])
+          (fprintf errorstr "Unable to find any annotations for ~a~n"
+                   node)
+          (error (get-output-string errorstr)))))
+                                
 ;--------------structs defined by Chris-----------------
 ; var declarations
 (struct VarDecl (type id expr) #:transparent)
@@ -54,6 +88,7 @@
 (struct MathExpr (expr1 op expr2) #:transparent)
 ; bool op, i.e., comparision
 (struct BoolExpr (expr1 op expr2) #:transparent)
+(struct BoolVal (expr1) #:transparent)
 ; logic op, and or or
 (struct LogicExpr (expr1 op expr2) #:transparent)
 ; assignment in a field for creating a record
@@ -136,6 +171,7 @@
      [(NUM) (NumExpr $1)] 
      [(STRING)(StringExpr $1)]
      [(ID) (VarExpr $1)]
+     [(BOOL) (BoolVal $1)]
      [(noval) $1]
      )
 

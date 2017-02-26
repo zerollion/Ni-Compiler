@@ -15,3 +15,4 @@ Project3 Type Cheking/error_tests/
 Project3 Type Cheking/tests/
 *.dot
 *.png
+typecheck-tests.rkt

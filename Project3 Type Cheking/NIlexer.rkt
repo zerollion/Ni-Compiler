@@ -11,7 +11,7 @@
 
 (provide (all-defined-out))
 
-(define-tokens value-tokens (NUM ID STRING))
+(define-tokens value-tokens (NUM ID STRING BOOL))
 (define-empty-tokens paren-types (LPAREN RPAREN LBRACKET RBRACKET LBRACE RBRACE))
 (define-empty-tokens operators (ADD MULT DIV SUB DOT))
 (define-empty-tokens punctuation (COMMA COLON SEMI))
@@ -73,6 +73,9 @@
    [">=" (token-GE)]
    ["|" (token-BOOLOR)]
    ["&" (token-BOOLAND)]
+   ;bool
+   ["true" (token-BOOL lexeme)]
+   ["false" (token-BOOL lexeme)]
    ;Whitespace
    [whitespace (return-without-pos (alexer input-port))]
    ;End-of-line

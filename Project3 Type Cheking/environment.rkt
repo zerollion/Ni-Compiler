@@ -15,8 +15,12 @@
   env)
 
 ; apply the given environment with the symbol and return its value
+(define (rec-env env sym)
+  (if (empty? env)
+      #f ;(error "symbol does not exist")
+      (hash-ref (first env) sym [λ () (rec-env (rest env) sym)])))
 (define (apply-env env sym)
-  (hash-ref (list-ref env 0) sym))
+    (rec-env env sym))
 
 ; push a new scope onto the environment list and return the new environment
 (define (push-scope env)
@@ -28,7 +32,7 @@
 
 
 ;---------------------------check expects------------------------------
-; make sure you defined the empty environment properly
+#|; make sure you defined the empty environment properly
 (check-expect (empty-env) `(,(hash-copy #hash())))
 
 ; simple tests for adding things to the environment with only one level of scope
@@ -47,7 +51,7 @@
 
 ; something more complicated
 (check-expect (apply-env (extend-env (push-scope (extend-env (empty-env) 'x 5)) 'y 6) 'y) 6)
-;(check-expect (apply-env (extend-env (push-scope (extend-env (empty-env) 'x 5)) 'y 6) 'x) 5)
+(check-expect (apply-env (extend-env (push-scope (extend-env (empty-env) 'x 5)) 'y 6) 'x) 5)
 (check-expect (apply-env (pop-scope (extend-env (push-scope (extend-env (empty-env) 'x 5)) 'y 6)) 'x) 5)
 
-(test)
+(test)|#
