@@ -154,7 +154,19 @@
 
     ;var declaration
     [(VarDecl type id expr)
-     (let ([t1 (typecheck expr env loop)] [t2 (apply-env env type)])
+     (let ([t1 (typecheck expr env loop)] [t2 (apply-env env type)])       
+       ;check recordtype name
+       (if (and (NewRecordExpr? expr) (not(eq? type #f)))
+           (if (equal? type (NewRecordExpr-name expr))
+               '() (log-typeerror "VarDecl: declared type does match." ast))
+           '())
+       ;check array type name
+       (if (and (NewArrayExpr? expr) (not(eq? type #f)))
+           (if (or (equal? type (NewArrayExpr-name expr))
+                   (types:NameType? (apply-env env (NewArrayExpr-name expr))))
+               '() (log-typeerror "VarDecl: declared type does match." ast))
+           '())
+       ;name matches
        (if (or (eq? type #f) (equal? (types:actual-type t1) (types:actual-type t2))
                (and (types:ArrayType? (types:actual-type t2)) (types:PengType? t1))
                (and (types:RecordType? (types:actual-type t2)) (types:PengType? t1)))
@@ -438,5 +450,4 @@ in
 end") (types:make-IntType)
       "test57.ni: a more complicated test that checks for nested record field access")
 
-(check-equal? (tc-str "let ni x is 5 in end") (types:make-VoidType) "simple let expressions without body")
 (test)|#
