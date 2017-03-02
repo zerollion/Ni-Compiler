@@ -31,11 +31,17 @@
 
     ;record types
     [(NameType name kind next)
-     (let ([t1 (apply-env env kind)])
+     (begin
+       (extend-env env name (types:make-NameType))
        (if (empty? next) '() (typecheck next env loop))
-       (if (or (eq? t1 #f) (eq? name 'int) (eq? name 'string) (eq? name 'boolean))
-           (log-typeerror "NameType: declared type does not exist." ast)
-           (extend-env env name (types:NameType t1)))
+       (let ([t1 (apply-env env kind)] [t3 (apply-env env name)])
+         (if (or (eq? t1 #f) (eq? name 'int) (eq? name 'string) (eq? name 'boolean))
+             (log-typeerror "NameType: declared type does not exist." ast)
+             ;(extend-env env name (types:NameType t1))
+             (types:set-NiType-actual! t3 (types:NameType t1))
+             ))
+       ;(with-handlers ([exn:fail? (λ (exn) (log-typeerror "NameType: must go through array." ast))])
+         ;(types:actual-type (apply-env env kind)))
         )]
 
     [(ArrayType name kind next)
@@ -43,7 +49,7 @@
        (if (empty? next) '() (typecheck next env loop))
        (if (or (eq? t1 #f) (eq? name 'int) (eq? name 'string) (eq? name 'boolean))
            (log-typeerror "ArrayType: declared type does not exist." ast)
-           (extend-env env name (types:ArrayType '() (types:actual-type t1))))
+           (extend-env env name (types:ArrayType '() t1)));(types:actual-type t1)
         )]
 
     [(TypeField name kind)
@@ -448,6 +454,6 @@ in
     // if you're resolving fields properly, this will work, if not, you'll get a type error
     identity.row1.x + identity.row2.x
 end") (types:make-IntType)
-      "test57.ni: a more complicated test that checks for nested record field access")
+      "test57.ni: a more complicated test that checks for nested record field access")|#
 
-(test)|#
+(test)
