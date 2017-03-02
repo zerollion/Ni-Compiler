@@ -1,32 +1,30 @@
 #lang racket
 
-;Tan Zhen COMP4704
-;with commentator
-
-(require racket/cmdline)
 (require parser-tools/lex
          parser-tools/yacc
          (prefix-in : parser-tools/lex-sre))
-(require test-engine/racket-tests)
+
+ 
 
 (provide (all-defined-out))
 
-(define-tokens value-tokens (NUM ID STRING BOOL))
+
+(define-tokens value-tokens (NUM ID STRING COMMENT BOOL))
 (define-empty-tokens paren-types (LPAREN RPAREN LBRACKET RBRACKET LBRACE RBRACE))
 (define-empty-tokens operators (ADD MULT DIV SUB DOT))
 (define-empty-tokens punctuation (COMMA COLON SEMI))
 (define-empty-tokens comparators (EQ NE LT GT LE GE))
 (define-empty-tokens boolops (BOOLOR BOOLAND))
-;(define-tokens comment (BCOMMENT LCOMMENT))
 
-(define-empty-tokens keywords (AND ARRAY AS BREAK DEFINE DO ELSE END IF IN IS
- JUNIPER KIND LET NEEWOM NI NOW OF PENG THEN TO WHILE WITH))
+(define-empty-tokens keywords (AND ARRAY AS BREAK DEFINE DO ELSE END FOR IF IN IS
+                                   JUNIPER KIND LET NEEWOM NI NOW OF PENG THEN
+                                   TO WHILE WITH))
 
 (define-empty-tokens endoffile (EOF))
 
-(define alexer
+(define nilexer
   (lexer-src-pos
-   ;keywords
+   ; keywords
    ["and" (token-AND)]
    ["array" (token-ARRAY)]
    ["as" (token-AS)]
@@ -35,6 +33,7 @@
    ["do" (token-DO)]
    ["else" (token-ELSE)]
    ["end" (token-END)]
+   ["false" (token-BOOL #f)]
    ["if" (token-IF)]
    ["in" (token-IN)]
    ["is" (token-IS)]
@@ -47,61 +46,76 @@
    ["of" (token-OF)]
    ["peng" (token-PENG)]
    ["then" (token-THEN)]
+   ["true" (token-BOOL #t)]
    ["to" (token-TO)]
    ["while" (token-WHILE)]
    ["with" (token-WITH)]
-   ;symbols
-   ["," (token-COMMA)]
-   [":" (token-COLON)]
-   [";" (token-SEMI)]
+   ; parens
+   ["]" (token-RBRACKET)]
+   ["[" (token-LBRACKET)]
    ["(" (token-LPAREN)]
    [")" (token-RPAREN)]
-   ["[" (token-LBRACKET)]
-   ["]" (token-RBRACKET)]
    ["{" (token-LBRACE)]
    ["}" (token-RBRACE)]
-   ["." (token-DOT)]
+   ;[(complement (:: any-string "xx")) (token-NUM lexeme)]
+   
+   
+   ; operators
    ["+" (token-ADD)]
    ["-" (token-SUB)]
    ["/" (token-DIV)]
    ["*" (token-MULT)]
+   ["." (token-DOT)]
+   ; punctuation
+   [";" (token-SEMI)]
+   ["," (token-COMMA)]
+   [":" (token-COLON)]
+   ;comparators
+   [">" (token-GT)]
+   ["<" (token-LT)]
    ["=" (token-EQ)]
    ["<>" (token-NE)]
-   ["<" (token-LT)]
-   [">" (token-GT)]
-   ["<=" (token-LE)]
    [">=" (token-GE)]
-   ["|" (token-BOOLOR)]
+   ["<=" (token-LE)]
+   ; boolops
    ["&" (token-BOOLAND)]
-   ;bool
-   ["true" (token-BOOL lexeme)]
-   ["false" (token-BOOL lexeme)]
-   ;Whitespace
-   [whitespace (return-without-pos (alexer input-port))]
-   ;End-of-line
-   [(eof) (token-EOF)]
-   [(:or "\r" "\n" "\t\n" "\n\t") (return-without-pos (alexer input-port))]
-   ;Strings
-   [(:: #\" (:* (:or (:: #\\ any-char) (char-complement (char-set "\"\\")))) #\" ) (token-STRING lexeme)]
-   ;identifier
-   [(:: alphabetic (:* (:or alphabetic numeric "-" "_" "'"))) (token-ID lexeme)]
-   ;int
+   ["|" (token-BOOLOR)]
+   ; now for the value tokens, first numbers, these are just digits
    [(:+ numeric) (token-NUM lexeme)]
-   ;comments
-   [(:: "/*" (complement (:: (:* any-char) "*/" (:* any-char))) "*/" ) (return-without-pos (alexer input-port))]
-   ;[(:: "/*" (complement (:: (:* any-char) "*/" (:* any-char))) "*/" ) (token-BCOMMENT lexeme)]
-   [(:: "//" (:* (char-complement #\newline)) "\n" ) (return-without-pos (alexer input-port))]
-   ;[(:: "//" (:* (char-complement #\newline)) "\n" ) (token-LCOMMENT lexeme)]
-   [any-char (error "unexpected input")]
+   ; next IDs, these are a bit more complicated
+   [(:: alphabetic (:* (:or alphabetic numeric "_" "-")) (:* #\')) (token-ID (string->symbol lexeme))]
+   ; finally, strings
+   ;[(:: #\" (:or (:: any-string "\\\"" any-string) (complement (:: any-string "\"" any-string)))  #\") (token-STRING lexeme)]
+   [(:: #\" (:* (:or (:: #\\ any-char) (char-complement (char-set "\"\\"))))  #\") (token-STRING lexeme)]
 
-  ))
+   ; comments
+   [(:: "/*" (complement (:: any-string "*/" any-string)) "*/") (return-without-pos (nilexer input-port))]                                                        
+   ; match // followed by anything that ends in \n 
+   [(:: "//" (:+ (char-complement #\newline))) (return-without-pos (nilexer input-port))]
+   
+   [whitespace (return-without-pos (nilexer input-port))]
+   [(eof) (token-EOF)]
+   [any-char (raise-lex-error start-pos lexeme)]
+   ))
+
+(define (raise-lex-error pos lexeme)
+  (let* ([linenums? (not (eq? (position-line pos) #f))]
+         [loc (if linenums? (position-line pos) (position-offset pos))]
+         [col (position-col pos)]
+         [partial-msg (string-append (if linenums? "syntax error at line "
+                                         "syntax error at offset ") (number->string loc))]
+         [msg (string-append partial-msg (if linenums? (string-append ", col " (number->string col)) "")
+                             ": '" lexeme "'")])
+         (raise-syntax-error 'nilexer msg)))
+    
+      
 
 ; input port -> list of tokens
 ; lex takes an input port and returns a list of tokens by lexing the input port
 (define (lex in)
   ; this doesn't necessarily need to be internal
   (letrec ([lexfun
-            (λ () (let ([tok (alexer in)])
+            (λ () (let ([tok (nilexer in)])
                      ; test to see if equal to eof and return empty list
                      (cond [(eq? (position-token-token tok) (token-EOF)) '()]
                            ; otherwise append token to eval of rest of tokens
@@ -123,16 +137,6 @@
     (port-count-lines! in)
     (lex in)))
 
-#|(define read-file
-  (command-line
-   #:args (filename) ; expect one command-line argument: <filename>
-   ; return the argument as a filename to compile
-   filename))
-
-(define (main filename)
-  (let
-      ([lst (lexfile filename)])
-    (write lst)
-  (printf "Pass Test ~a\n" filename)))
-
-(main read-file)|#
+; input port -> 0-arg function that returns next token
+(define (get-tokenizer in)
+  (lambda () (nilexer in)))

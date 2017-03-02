@@ -1,22 +1,14 @@
 #lang racket
 
-;Tan Zhen 872692777
-;Project2 Parsing
-;use command-line flag -r to rewrite "with-loop" as "while loop"
-;math precedence fixed
-
-;(make-dot-file (parse-str "5") "out.dot")
-;Get-Childitem .\tests\ -name .\*.ni | Foreach {.\NIparser.exe .\tests\$_}
-
-(require "NIlexer.rkt"
+(require parser-tools/cfg-parser
+         parser-tools/yacc
          (prefix-in lex: parser-tools/lex)
-         parser-tools/cfg-parser
-         parser-tools/yacc)
-(require test-engine/racket-tests)
+         "errors.rkt"
+         "nilexer.rkt")
 
 (provide (all-defined-out))
 
-;--------------annotation functions by Chris-----------------
+
 ; build up a set of annotations on the nodes, this separates out
 ; this info so that we can more easily write check-expects on the
 ; correct structure of the AST--note we use a hasheq instead of a
@@ -50,7 +42,8 @@
                    node)
           (error (get-output-string errorstr)))))
                                 
-;--------------structs defined by Chris-----------------
+
+
 ; var declarations
 (struct VarDecl (type id expr) #:transparent)
 
@@ -80,6 +73,8 @@
 (struct FuncallExpr (name args) #:transparent)
 ; a string
 (struct StringExpr (str) #:transparent)
+; a bool value, like true or false--this is a literal
+(struct BoolVal (val) #:transparent)
 ; a noval 
 (struct NoVal () #:transparent)
 ; a list of declarations for the let and a list of expressions following it
@@ -88,7 +83,6 @@
 (struct MathExpr (expr1 op expr2) #:transparent)
 ; bool op, i.e., comparision
 (struct BoolExpr (expr1 op expr2) #:transparent)
-(struct BoolVal (expr1) #:transparent)
 ; logic op, and or or
 (struct LogicExpr (expr1 op expr2) #:transparent)
 ; assignment in a field for creating a record
@@ -96,7 +90,7 @@
 ; creating a new record
 (struct NewRecordExpr (name assignments) #:transparent)
 ; creating a new array
-(struct NewArrayExpr (name expr kind) #:transparent)
+(struct NewArrayExpr (name num-elements init-values) #:transparent)
 ; an if expression (hint, you may temporarily use an IfElseExpr if you
 ; would like to make it easy to see when you're matching or not
 (struct IfExpr (test true-branch false-branch) #:transparent)
@@ -106,293 +100,306 @@
 (struct AssignmentExpr (name expr) #:transparent)
 ; break expression--this has no arguments
 (struct BreakExpr () #:transparent)
-; peng expression
-(struct PengExpr () #:transparent)
 ; with expression (think: for expression)
-(struct WithExpr (idname initexpr fromexpr toexpr) #:transparent)
-;---------------------------------------------------------------------
-; struct for comment
-;(struct LineComment (word) #:transparent)
-;(struct BlockComment (word) #:transparent)
+(struct WithExpr (idname fromexpr toexpr body) #:transparent)
+; peng expressions
+(struct PengExpr () #:transparent)
 
-(define rewrite-with (make-parameter false))
-
-(define aparser
+(define niparser
   (cfg-parser
    (src-pos)
    (start program)
    (end EOF)
-   (tokens value-tokens paren-types operators punctuation comparators boolops keywords endoffile)
+   ;(debug "parse-table.txt")
    (error (lambda (tok-ok? tok-name tok-value start-pos end-pos)
+            ; indicate a parsing error occurred
+            (parse-error #t)
             (if (and (eq? tok-ok? #t) (eq? tok-name 'EOF)) '()
                 (printf "Parsing error at line ~a, col ~a: token: ~a, value: ~a, tok-ok? ~a\n"
                         (lex:position-line start-pos) (lex:position-col start-pos) tok-name tok-value tok-ok?))))
+   (tokens value-tokens paren-types operators punctuation
+           comparators boolops keywords endoffile)
    (grammar
-
-    (program
-     [(expr) (list $1)]
-     ;[(reccomm expr) (list $1 $2)]
-     )
-
-    (expr
-     [(token) $1]
-     [(vardecl) $1]
-     [(typedecl) $1]
-     [(rctypedecl) $1]
-     [(fundecl) $1]
-     [(lvalue) $1]
-     [(funcall) $1]
-     [(letexpr) $1]
-     [(sqexpr) $1]
-     ;[(MathEx) $1]
-     [(LogicEx) $1]
-     ;[(BoolEx) $1]
-     [(newrec) $1]
-     [(newarr) $1]
-     [(AssignEx) $1]
-     [(ifEx) $1]
-     [(whileEx) $1]
-     [(withEx) $1]
-     [(breakEx) $1]
-     [(pengEx) $1]
-     ;[(reccomm) $1]
-     ;[(reccomm expr) (if (list? $2) (cons $1 $2) (list $1 $2))]
-     )
-    ;sequence of expressions
-    (sqexpr
-     [(LPAREN Exprs RPAREN) $2]
-     )
-    (Exprs
-     [(expr SEMI expr) (list $1 $3)]
-     [(expr SEMI Exprs) (cons $1 $3)]
-     )
     
-    (token
-     [(NUM) (NumExpr $1)] 
-     [(STRING)(StringExpr $1)]
-     [(ID) (VarExpr $1)]
-     [(BOOL) (BoolVal $1)]
-     [(noval) $1]
-     )
-
-    ;1.Varaible Declarations
+    ; a program will be a list of declarations and expressions
+    (program
+     [(decs) (list $1)]
+     [(decs program) (cons $1 $2)]
+     [(expr) (list $1)]
+     [(expr program) (cons $1 $2)])
+    
+    (decs
+     [(rec-typedecl) $1]
+     [(functiondecl) $1]
+     [(vardecl) (begin
+                  (add-note $1 'position $1-start-pos)
+                  $1)])
+    
+    ; recursive type declarations
+    (rec-typedecl
+     ; add the position for the base cases 
+     [(typedecl) (begin
+                   (add-note $1 'position $1-start-pos)
+                   $1)]
+     [(typedecl AND rec-typedecl)
+      (cond
+        [(NameType? $1) (let ([node (struct-copy NameType $1 [next $3])])
+                          ; need to add the position for these since we're changing the original
+                          (add-note node 'position $1-start-pos)
+                          node)]
+        [(RecordType? $1) (let ([node (struct-copy RecordType $1 [next $3])])
+                            (add-note node 'position $1-start-pos)
+                            node)]
+        [(ArrayType? $1) (let ([node (struct-copy ArrayType $1 [next $3])])
+                           (add-note node 'position $1-start-pos)
+                           node)]
+        [else (error "Parser error, unknown kind for rec-typedecl")])])
+    
+    
+    ; type declarations, of which there are three types
+    (typedecl
+     [(DEFINE typeid KIND AS recordtype) (RecordType $2 $5 '())]
+     [(DEFINE typeid KIND AS arraytype) (ArrayType $2 $5 '())]
+     [(DEFINE typeid KIND AS typeid) (NameType $2 $5 '())])
+                                       
+    
+    ; defines a record type
+    (recordtype
+     [(LBRACE typefields RBRACE) $2])
+    
+    ; defines an array type
+    (arraytype
+     [(ARRAY OF typeid) $3])
+    
+    ; var declarations, which can be like "ni x is 5" or "ni int x is 5"
     (vardecl
      [(NI ID IS expr) (VarDecl #f $2 $4)]
-     [(NI ID ID IS expr) (VarDecl $2 $3 $5)]
-     )
-    ;2.Data type Declarations
-    (rctypedecl
-     [(typedecl) $1]
-     [(typedecl AND rctypedecl)
-      (match $1
-        [(NameType name kind next) (NameType name kind $3)]
-        [(RecordType name field next) (RecordType name field $3)]
-        [(ArrayType name kind next) (ArrayType name kind $3)]
-        )]
-     )
-    (typedecl
-     [(DEFINE ID KIND AS ID) (NameType $2 $5 '())]
-     [(DEFINE ID KIND AS LBRACE typefiels RBRACE) (RecordType $2 $6 '())]
-     [(DEFINE ID KIND AS LBRACE RBRACE) (RecordType $2 '() '())]
-     [(DEFINE ID KIND AS ARRAY OF ID) (ArrayType $2 $7 '())]
-     )
-    (typefiels
-     [(typeEx) (list $1)]
-     [(typeEx COMMA typefiels) (cons $1 $3)]
-     )
-    (typeEx
-     [(ID ID) (TypeField $2 $1)]
-     )
-    ;3.Function declarations
-    (fundecl
-     [(NEEWOM ID LPAREN typefiels RPAREN IS expr) (FunDecl $2 $4 '() $7 '())]
-     [(NEEWOM ID LPAREN typefiels RPAREN AS ID IS expr) (FunDecl $2 $4 $7 $9 '())]
-     [(NEEWOM ID LPAREN typefiels RPAREN IS expr AND fundecl) (FunDecl $2 $4 '() $7 $9)]
-     [(NEEWOM ID LPAREN typefiels RPAREN AS ID IS expr AND fundecl) (FunDecl $2 $4 $7 $9 $11)]
-     ;no arguments
-     [(NEEWOM ID LPAREN RPAREN IS expr) (FunDecl $2 '() '() $6 '())]
-     [(NEEWOM ID LPAREN RPAREN AS ID IS expr) (FunDecl $2 '() $6 $8 '())]
-     [(NEEWOM ID LPAREN RPAREN IS expr AND fundecl) (FunDecl $2 '() '() $6 $8)]
-     [(NEEWOM ID LPAREN RPAREN AS ID IS expr AND fundecl) (FunDecl $2 '() $6 $8 $10)]
-     )
-     #|(rcfundecl
-     [(fundecl) $1]
-     [(fundecl AND rcfundecl)
-      (match $1
-        [(FunDecl name args rettype body next) (FunDecl name args rettype body $3)]
-       )]
-     )|#
+     [(NI typeid ID IS expr) (VarDecl $2 $3 $5)])
     
-    ;4.1 Local variables
+    ; type ids
+    (typeid
+     ; note, we just return the type id here, we don't need to make a new special node
+     [(ID) $1])
+    
+    ; typefields -- these are used by records, we want a list here of TypeField structs
+    ; note, these can be empty! 
+    (typefields
+     [() '()]
+     [(typeid ID) (let ([node (TypeField $2 $1)])
+                    (add-note node 'position $1-start-pos)
+                    (list node))]
+     [(typeid ID COMMA typefields) (let ([node (TypeField $2 $1)])
+                                     (add-note node 'position $1-start-pos)
+                                     (cons node $4))])
+    
+
+    ; fun declarations!
+    (functiondecl
+     [(NEEWOM ID LPAREN typefields RPAREN IS expr) (let ([node (FunDecl $2 $4 #f $7 '())])
+                                                     (add-note node 'position $1-start-pos)
+                                                     node)]
+     [(NEEWOM ID LPAREN typefields RPAREN AS typeid IS expr) (let ([node (FunDecl $2 $4 $7 $9 '())])
+                                                               (add-note node 'position $1-start-pos)
+                                                               node)]
+     [(NEEWOM ID LPAREN typefields RPAREN IS expr AND functiondecl) (let ([node (FunDecl $2 $4 #f $7 $9)])
+                                                                      (add-note node 'position $1-start-pos)
+                                                                      node)]
+     [(NEEWOM ID LPAREN typefields RPAREN AS typeid IS expr AND functiondecl) (let ([node (FunDecl $2 $4 $7 $9 $11)])
+                                                                                (add-note node 'position $1-start-pos)
+                                                                                node)])
+
+    ; lvalues, these are things that appear on the left of an expression
     (lvalue
-     [(token) $1]
+     [(ID) (VarExpr $1)]
      [(lvalue DOT ID) (RecordExpr $1 $3)]
-     [(lvalue LBRACKET expr RBRACKET) (ArrayExpr $1 $3)]
-     )
-    ;4.2 function call
-    (funcall
-     [(ID LPAREN RPAREN) (FuncallExpr $1 '())]
-     [(ID LPAREN args RPAREN) (FuncallExpr $1 $3)]
-     )
-    (args
-     [(expr) (list $1)]
-     [(expr COMMA args) (cons $1 $3)]
-     )
-    ;4.3 no value
-    (noval
-     [(LPAREN RPAREN) (NoVal)]
-     )
-    ;4.4 let expressions
-    (letexpr
-     [(LET declarations IN END) (LetExpr $2 '())]
-     [(LET declarations IN expr END) (LetExpr $2 (list $4))]
-     [(LET declarations IN Exprs END) (LetExpr $2 $4)]
-     )
-    (declarations
-     [(decl) (list $1)]
-     ;[(comm decl) (list $1 $2)]
-     ;[(comm declarations) (cons $1 $2)]
-     [(decl declarations) (cons $1 $2)]
-     )
-    (decl
-     [(vardecl) $1]
-     [(fundecl) $1]
-     [(rctypedecl) $1]
-     )
-    ;4.5 Math Expressions
-    (MathEx
-     [(MathEx ADD MathTerm) (MathExpr $1 '+ $3)]
-     [(MathEx SUB MathTerm) (MathExpr $1 '- $3)]
-     [(SUB MathEx) (MathExpr (NumExpr "0") '- $2)]
-     [(MathTerm) $1]
-     )
-    (MathTerm
-     [(MathTerm MULT MathFact) (MathExpr $1 '* $3)]
-     [(MathTerm DIV MathFact) (MathExpr $1 '/ $3)]
-     [(MathFact) $1]
-     )
-    (MathFact
-     ;[(NUM DOT NUM) (MathExpr $1 #\. $3)]
-     [(LPAREN MathEx RPAREN) $2]
-     [(expr) $1]
-     [(token) $1]
-     )
-    ;4.6 Bool Expressions
-    (BoolEx
-     [(BoolEx EQ BoolTerm) (BoolExpr $1 'eq $3)]
-     [(BoolEx NE BoolTerm) (BoolExpr $1 '<> $3)]
-     [(BoolEx LT BoolTerm) (BoolExpr $1 '< $3)]
-     [(BoolEx GT BoolTerm) (BoolExpr $1 '> $3)]
-     [(BoolEx LE BoolTerm) (BoolExpr $1 '<= $3)]
-     [(BoolEx GE BoolTerm) (BoolExpr $1 '>= $3)]
-     [(BoolTerm) $1]
-     )
-    (BoolTerm
-     [(LPAREN BoolEx RPAREN) $2]
-     [(MathEx) $1]
+     [(lvalue LBRACKET expr RBRACKET) (ArrayExpr $1 $3)])                                       
+
+    ; expressions!
+    (expr
+     ; expressions specificaly for order of operations around
+     ; mathematical things, like bools, addition, etc.
+     [(low-prec-expr) (begin
+                        (add-note $1 'position $1-start-pos)
+                        $1)]
+     [(statements) (begin
+                     (add-note $1 'position $1-start-pos)
+                     $1)]
      )
 
-    ;4.7 Logic Expressions
-    (LogicEx
-     [(LogicEx BOOLOR LogicTerm) (LogicExpr  $1 'or $3)]
-     [(LogicEx BOOLAND LogicTerm) (LogicExpr  $1 'and $3)]
-     [(LogicTerm) $1]
+
+    ; defines the lowest precedence expressions
+    (low-prec-expr
+     ; entry into all the math-like expressions
+     [(logicexpr) $1]
      )
-    (LogicTerm
-     [(LPAREN LogicEx RPAREN) $2]
-     [(BoolEx) $1]
-     )
-    ;5.1 creating a new record
-    (newrec
-     [(ID LBRACE RBRACE) (NewRecordExpr $1 #f)]
-     [(ID LBRACE fieldassigns RBRACE) (NewRecordExpr $1 $3)]
-     )
-    (fieldassigns
-     [(fieldassign) (list $1)]
-     [(fieldassign COMMA fieldassigns) (cons $1 $3)]
-     )
-    (fieldassign
-     [(ID IS expr) (FieldAssign $1 $3)]
-     )
-    ;5.2 creating a new array
-    (newarr
-     [(ID LBRACKET expr RBRACKET OF expr) (NewArrayExpr $1 $3 $6)]
-     )
-    ;6 Assignment expression
-    (AssignEx
-     [(NOW lvalue IS expr) (AssignmentExpr $2 $4)]
-     )
-    ;7 If expression
-    (ifEx
-     [(IF expr THEN expr END) (IfExpr $2 $4 #f)]
-     [(IF expr THEN expr ELSE expr END) (IfExpr $2 $4 $6)]
-     )
-    ;8 While expression
-    (whileEx
-     [(WHILE expr DO expr END) (WhileExpr $2 $4)]
-     )
-    ;9 with expression
-    (withEx
-     [(WITH ID AS expr TO expr DO expr END)
-      (if (rewrite-with) ;test
-          ;then
-          (let ([body (list* $8 (list (MathExpr (VarExpr $2) '+ (NumExpr "1"))))])
-            (LetExpr (list (VarDecl "int" $2 $4))
-                     (list (WhileExpr (BoolExpr (VarExpr $2) '<= $6) body))))
-          ;else
-          (WithExpr $2 $4 $6 $8))]
-     )
-    ;10 break expression
-    (breakEx
-     [(BREAK) (BreakExpr)]
-     )
-    ;11 peng expression
-    (pengEx
-     [(PENG) (PengExpr)]
-     )
-    ;12 comment
-    #|(reccomm
-     [(comm) $1]
-     [(comm reccomm) (if (list? reccomm) (cons $1 $2) (cons $1 (list $2)))]
-     )
-    (comm
-     [(BCOMMENT) (BlockComment $1)]
-     [(LCOMMENT) (LineComment $1)]
-     )|#
     
-    )
-   
-   ))
+    ; statements, these are no value expressions, so you really can't have these mixed
+    ; in with other kinds of expressions, like 1 + while ... doesn't make sense
+    (statements
+     ; assignment, it should be at the top of a parse tree
+     [(NOW lvalue IS expr) (AssignmentExpr $2 $4)]
+     ; so should loops
+     [(while-expr) $1]
+     [(with-expr) $1]
+     [(IF expr THEN expr END) (IfExpr $2 $4 '())]
+     )
 
-;utiliy functions
-(define (lex-procedure in)
-  (lambda () (alexer in)))
+    (highest-prec-expr     
+     [(funcall-expr) $1]                   ; function calls
+     [(LPAREN expr RPAREN) $2]             ; paren expression     
+     [(lvalue) $1]                         ; lvalue expression
+     [(sequence-expr) $1]                  ; sequence expression
+     [(NUM) (NumExpr $1)]                  ; just a number
+     [(STRING) (StringExpr $1)]            ; just a string
+     [(noval) $1]                          ; the empty expression
+     [(letexpr) $1]                        ; let expressions
+     [(recordcreation) $1]                 ; creating a new record
+     [(arraycreation) $1]                  ; creating a new array
+     [(BREAK) (BreakExpr)]                 ; breaks from loops
+     [(PENG) (PengExpr)]                   ; good old peng
+     [(unary-minus-expr) $1]               ; for unary minus
+     [(BOOL) (BoolVal $1)]                 ; for 'true' or 'false'
+                        
+     [(ifelse-expr) $1]
+     )
 
+    (unary-minus-expr
+     [(SUB expr) (MathExpr (NumExpr "0") '- $2)])
+
+    ; if/then/else expressions, these must return values
+    (ifelse-expr
+     [(IF expr THEN expr ELSE expr END) (IfExpr $2 $4 $6)])
+
+    ; while loops, these cannot return values
+    (while-expr
+     [(WHILE expr DO expr END) (WhileExpr $2 $4)])
+
+    ; with expressions, these cannot return values
+    (with-expr
+     [(WITH ID AS expr TO expr DO expr END) (WithExpr $2 $4 $6 $8)])
+
+
+    ; logic expressions have the lowest precedence, this allows us to
+    ; easily check (without parenthesis) on something like x < 5 & x > 6
+    (logicexpr
+     [(logicexpr BOOLAND compexpr) (LogicExpr $1 'and $3)]
+     [(logicexpr BOOLOR compexpr) (LogicExpr $1 'or $3)]
+     [(compexpr) $1])
+    
+    ; since boolean expressions have lower precedence, we begin here
+    ; before factoring out the ops that have the highest precedence,
+    ; note that this will prevent the more obvious attempts at 0 < 5 < 10,
+    ; but will not work for things like 0 < 5 + (3 < 10)--typechecking
+    ; should do that
+    (compexpr
+     [(arithmeticexpr EQ arithmeticexpr) (BoolExpr $1 'eq $3)]
+     [(arithmeticexpr LT arithmeticexpr) (BoolExpr $1 'lt $3)]
+     [(arithmeticexpr GT arithmeticexpr) (BoolExpr $1 'gt $3)]
+     [(arithmeticexpr GE arithmeticexpr) (BoolExpr $1 'ge $3)]
+     [(arithmeticexpr LE arithmeticexpr) (BoolExpr $1 'le $3)]
+     [(arithmeticexpr NE arithmeticexpr) (BoolExpr $1 'ne $3)]
+     [(arithmeticexpr) $1])
+     
+    ; now we factor out expressions for additions and subtraction
+    ; so they have lower precedence than MULT and DIV
+    (arithmeticexpr
+     [(arithmeticexpr ADD term) (MathExpr $1 '+ $3)]
+     [(arithmeticexpr SUB term) (MathExpr $1 '- $3)]
+     [(term) $1])
+
+    
+    ; terms are things that are added, which is why
+    ; they result directly from expressions
+    (term
+     [(term MULT factor) (MathExpr $1 '* $3)]
+     [(term DIV factor) (MathExpr $1 '/ $3)]
+     [(factor) $1])
+
+    
+    ; factors are things that are multiplied, which is why
+    ; they result from terms above 
+    (factor
+     [(highest-prec-expr) (begin
+                            (add-note $1 'position $1-start-pos)
+                            $1)])
+     
+    ; rules related to function calls
+    (funcall-expr
+     [(ID LPAREN argexpr RPAREN) (FuncallExpr $1 $3)])
+    
+    ; this is specifically to match the list of arguments for a function call
+    (argexpr
+     [() '()]
+     [(expr) (list $1)]
+     [(expr COMMA argexpr) (cons $1 $3)])
+    
+    ; sequence expression, these simply return a list of expressions
+    (sequence-expr
+     [(LPAREN expr-list RPAREN) $2])
+    
+    ; the internals of a sequence expression, which must be at least two things
+    ; (otherwise, it's just a paren expression, or with none, it's a NoVal)
+    (expr-list
+     [(expr SEMI expr) (cons $1 (list $3))]
+     [(expr SEMI expr-list) (cons $1 $3)])
+    
+    ; the empty expression
+    (noval
+     [(LPAREN RPAREN) (NoVal)])
+    
+    
+    ; let expressions
+    (letexpr
+     [(LET declist IN exprseq END) (LetExpr $2 $4)])
+    ; dec list, needed for let expressions
+    (declist
+     [(decs) (list $1)]
+     [(decs declist) (cons $1 $2)])
+    ; exprseq, needed for let expressions
+    (exprseq
+     [() '()]
+     [(expr) (list $1)]
+     [(expr SEMI exprseq) (cons $1 $3)])
+    
+    ; creation of records
+    (recordcreation
+     [(typeid LBRACE fieldassignments RBRACE) (NewRecordExpr $1 $3)]
+     [(typeid LBRACE RBRACE) (NewRecordExpr $1 '())])
+    ; field assignments are used within the braces of records
+    (fieldassignments
+     [(ID IS expr) (list (FieldAssign $1 $3))]
+     [(ID IS expr COMMA fieldassignments) (cons (FieldAssign $1 $3) $5)])
+
+    ; creation of arrays
+    (arraycreation
+     [(typeid LBRACKET expr RBRACKET OF expr) (NewArrayExpr $1 $3 $6)])
+
+     
+    )))
+
+; input port -> ni ast   
+; construct an ast from the input port
+(define (build-ast in)
+  (parse-error #f)
+  (hash-clear! (annotations))
+  (port-count-lines! in)
+  (niparser (get-tokenizer in)))
+
+; string representing ni code -> ni ast
+; parses a string and turns it into an ast if possible
 (define (parse-str str)
   (let ([in (open-input-string str)])
-    (port-count-lines! in)
-    (aparser (lex-procedure in))))
+    (hash-clear! (annotations))
+    (build-ast in)))
 
+; string (filename) -> ni ast
+; opens and parses a file and tries to turn it into an ast if possible
 (define (parse-file filename)
   (let ([in (open-input-file filename)])
-    (port-count-lines! in)
-    (aparser (lex-procedure in))))
+    (parse-error #f)
+    (hash-clear! (annotations))
+    (build-ast in)))
 
-;-------------------------- main ------------------------------------
-#|(define read-file
-  (command-line
-   #:once-each
-   [("-r") "rewrite with-loop as while"
-                        (rewrite-with true)]
-   #:args (filename) ; expect one command-line argument: <filename>
-   ; return the argument as a filename to compile
-   filename))
 
-(provide main)
-(define (main filename)
-  (let
-      ([lst (parse-file filename)])
-    (write lst)
-  (printf "Pass Test ~a\n" filename)))
 
-(main read-file)|#
+

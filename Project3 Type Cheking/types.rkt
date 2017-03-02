@@ -47,7 +47,9 @@
                                                                        [(#t) write]
                                                                        [(#f) display]
                                                                        [else (lambda (p port) (print p port mode))])])
-                                                     (write-string "" port))))])
+                                                     (write-string "<name: " port)
+                                                     (theprinter (NiType-actual ty) port)
+                                                     (write-string ">" port))))])
                                                    
 
 (struct BoolType NiType () #:transparent
@@ -83,7 +85,7 @@
 ; and actual will refer to the actual type
 (struct NameTypePair NiType (name) #:transparent)
 ;value types
-(struct VarValue (type) #:transparent)
+(struct VarValue (type iter) #:transparent)
 ; as with records, we need something for parameters,
 ; so this will be stored as a list of NameTypePair structs
 (struct FunValue (parameters return-type) #:transparent)
@@ -92,16 +94,42 @@
 (define (make-StringType) (StringType '()))
 (define (make-VoidType) (VoidType '()))
 (define (make-IntType) (IntType '()))
-;(define (make-NameType) (NameType 'NiType))
+(define (make-NameType) (NameType '()))
 (define (make-BoolType) (BoolType '()))
 (define (make-PengType) (PengType '()))
-(define (make-ArrayType typename) (ArrayType '() typename))
+;(define (make-ArrayType typename) (ArrayType '() typename))
 
 ;record type
-(define (make-RecordType fields) (RecordType '() fields))
-(define (make-NameTypePair name) (NameTypePair 'NiType name))
+;(define (make-RecordType fields) (RecordType '() fields))
+;(define (make-NameTypePair name) (NameTypePair 'NiType name))
 
 ;value types
-(define (make-VarValue type) (VarValue type))
+;(define (make-VarValue type) (VarValue type))
 (define (make-FunValue parameters return-type)
   (FunValue parameters return-type))
+
+;---------------------actual type functions------------------------
+(define (actual-type ty)
+  (match ty
+    [(StringType _) ty]
+    [(VoidType _) ty]
+    [(IntType _) ty]
+    [(BoolType _) ty]
+    [(PengType _) ty]
+    [(ArrayType _ _) ty]
+    [(RecordType _ _) ty]
+    [(FunValue _ _) ty]
+    [(NameType actual) (if (eq? actual '()) (error "NameType doesn't refer to actual!") (actual-type actual))]
+    [(NiType _) (error "Shouldn't have a NiType instantiated")]))
+
+(define (fieldcheck field fieldlist)
+  (if (empty? fieldlist)
+      #f
+      (if (equal? field (NameTypePair-name (first fieldlist)))
+          (NiType-actual (first fieldlist))
+          (fieldcheck field (rest fieldlist)))
+      )
+  )
+
+
+
