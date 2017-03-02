@@ -45,11 +45,13 @@
         )]
 
     [(ArrayType name kind next)
-     (let ([t1 (apply-env env kind)])
+     (begin
+       (extend-env env name (types:make-PengType))
        (if (empty? next) '() (typecheck next env loop))
-       (if (or (eq? t1 #f) (eq? name 'int) (eq? name 'string) (eq? name 'boolean))
-           (log-typeerror "ArrayType: declared type does not exist." ast)
-           (extend-env env name (types:ArrayType '() t1)));(types:actual-type t1)
+       (let ([t1 (apply-env env kind)])
+         (if (or (eq? t1 #f) (eq? name 'int) (eq? name 'string) (eq? name 'boolean))
+             (log-typeerror "ArrayType: declared type does not exist." ast)
+             (extend-env env name (types:ArrayType '() t1))));(types:actual-type t1)
         )]
 
     [(TypeField name kind)
