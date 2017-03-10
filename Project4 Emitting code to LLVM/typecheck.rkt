@@ -86,7 +86,8 @@
 ; in a loop. loop? is passed as true down from loops and we can
 ; check if breaks are in loops
 (define (typecheck ast tenv venv loop?)
-  (match ast
+  (let ([type-of-expr
+         (match ast
     ; the base case for lists, this will just be the void type
     ['() (types:make-VoidType)]
     ; the recursive case, we treat a 1 element list as special
@@ -336,7 +337,9 @@
     [_ (begin
          (displayln ast)
          (error "Node not implemented yet!"))]
-    ))
+    )])
+    (add-note ast 'type type-of-expr)
+    type-of-expr))
 
 
 ; typecheck with expressions--a little extra work here

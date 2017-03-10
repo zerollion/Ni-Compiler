@@ -54,13 +54,13 @@
     ; integer literals
     [(NumExpr val) (numexpr->llvm ast val)]
 
-    ;[(StringExpr val) (stringexpr->llvm ast val)]
+    [(StringExpr val) (stringexpr->llvm ast val)]
 
     ; variable declarations!
     ;[(VarDecl _ _ _) (vardecl->llvm ast)]
     
     ; function calls
-    ;[(FuncallExpr _ _) (funcall->llvm ast)]
+    [(FuncallExpr _ _) (funcall->llvm ast)]
        
     ; variable expressions
     ;[(VarExpr _) (var->llvm ast)]
@@ -74,5 +74,23 @@
 (define (numexpr->llvm node val)
   ; literal nums can go in registers
   (let ([result (emit-math 'add val "0")])
-    (add-note node 'result result)))          
-    
+    (add-note node 'result result)))
+
+;emits a string
+(define (stringexpr->llvm node val)
+  (let ([result (emit-literal-string val)])
+    (add-note node 'result result)))
+
+;emits variable declaration
+
+;emits function call expression
+(define (funcall->llvm node)
+  (let* ([name (FuncallExpr-name node)]
+         [listarg (FuncallExpr-args node)]
+         [rettype (get-note node 'type)])
+    (for-each (λ (arg) (ast->llvm arg)) listarg)
+    (let* ([nodelist (map (λ (arg) (get-note arg 'result)) listarg)]
+           [typelist (map (λ (arg) (get-note arg 'type)) listarg)]
+           [result (emit-funcall name nodelist typelist rettype)])
+      (add-note node 'result result)
+    )))

@@ -87,10 +87,10 @@
   (newline)
   (println ";;;;; START OF PROGRAM ;;;;;")
   (println "; target data layout for Mac, change to m:w instead for Windows" )
-  (println "target datalayout = \"e-m:o-i64:64-f80:128-n8:16:32:64-S128\"" )
+  (println "target datalayout = \"e-m:w-i64:64-f80:128-n8:16:32:64-S128\"" )
   (newline )
-  (println "; target triple for Mac" )
-  (println "target triple = \"x86_64-apple-macosx10.12.0\"" )
+  ;(println "; target triple for Mac" )
+  ;(println "target triple = \"x86_64-apple-macosx10.12.0\"" )
   (newline )
 
   ; output the struct defn for strings
@@ -228,21 +228,72 @@
         [else (raise-arguments-error 'emit-math "mathsym must be 'add, 'sub, 'mul, or 'div"
                                      "mathsym" mathsym)])
       ; return the result that was created
-      result)))    
+      result)))
+
+(define (emit-literal-string val)
+  (let([str (substring val 1 (sub1 (string-length val)))]
+       [length (sub1 (string-length val))]
+       [strval (make-global-result)]
+       [struct (make-global-result)])
+    (begin-global-defn)
+    (let ([L1 (result->string strval)]
+          [L2 (result->string struct)]
+          [strres (string-append " c\"" str "\00\"")]
+          [type1 (string-append "[" (number->string length) " x i8]")]
+          [type2 "%struct.string"])
+      (println L1 " = global " type1 strres ", align 1")
+      (println L2 " = global " type2 "{ i64 " (number->string (sub1 length))
+               ", i8* getelementptr inbounds (" type1 ", " type1 "* " L1 ", i32 0, i32 0) }, align 8")
+      (end-global-defn)
+      struct
+      )
+    ))
+
+
+(define (emit-funcall name nodelist typelist rettype)
+  (begin
+    (let* ([namestr (symbol->string name)]
+          [retstr (get-type-name rettype)]
+          [temp (make-temp-result)]
+          [tempstr (result->string temp)])
+      (if (equal? retstr "void")
+          (print "call void @" namestr "( ")
+          (print tempstr " = call " retstr " @" namestr "( "))
+      
+      (if (empty? nodelist)
+          (print "")
+          (begin
+            ;first
+            (let ([nodestr (result->string (first nodelist))]
+                  [typestr (get-type-name (first typelist))])
+              (print typestr nodestr)
+              )
+            ;rest
+            (for-each (λ (node type)
+                        (let ([nodestr (result->string node)]
+                              [typestr (get-type-name type)])
+                          (print ", " typestr nodestr)
+                          )) (rest nodelist) (rest typelist))
+          ))
+      (println " )")
+      (if (equal? retstr "void")
+          #f
+          temp)
+   )))
     
 
 (define (get-type-name nitype)
   (let ([ty (actual-type nitype)])
     (match ty
       [(IntType _) "i64"]
-      [(BoolType _) "i8"]
+      [(BoolType _) "i1"]
       [(StringType _) "%struct.string *"]
       [(VoidType _) "void"]
       [(ArrayType _ _ _) "%struct.array *"]
       ; you'll want to add records here...
       [_ (error "get-type-name not worknig for your type!")])))
                      
-
+;clang
 
 
 
