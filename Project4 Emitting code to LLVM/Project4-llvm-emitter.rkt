@@ -234,11 +234,13 @@
   (let([str (substring val 1 (sub1 (string-length val)))]
        [length (sub1 (string-length val))]
        [strval (make-global-result)]
-       [struct (make-global-result)])
+       [struct (make-global-result)]
+       ; replace every "\n" with "\0A" for newline in LLVM
+       [llvmstr (string-replace (substring val 1 (sub1 (string-length val))) "\\n" "\\0A")])
     (begin-global-defn)
     (let ([L1 (result->string strval)]
           [L2 (result->string struct)]
-          [strres (string-append " c\"" str "\00\"")]
+          [strres (string-append " c\"" llvmstr "\\00\"")]
           [type1 (string-append "[" (number->string length) " x i8]")]
           [type2 "%struct.string"])
       (println L1 " = global " type1 strres ", align 1")
@@ -252,10 +254,11 @@
 
 (define (emit-funcall name nodelist typelist rettype)
   (begin
+    (println ";Function Call on:" (symbol->string name))
     (let* ([namestr (symbol->string name)]
-          [retstr (get-type-name rettype)]
-          [temp (make-temp-result)]
-          [tempstr (result->string temp)])
+           [retstr (get-type-name rettype)]
+           [temp (make-temp-result)]
+           [tempstr (result->string temp)])
       (if (equal? retstr "void")
           (print "call void @" namestr "( ")
           (print tempstr " = call " retstr " @" namestr "( "))
@@ -266,13 +269,13 @@
             ;first
             (let ([nodestr (result->string (first nodelist))]
                   [typestr (get-type-name (first typelist))])
-              (print typestr nodestr)
+              (print typestr " " nodestr)
               )
             ;rest
             (for-each (λ (node type)
                         (let ([nodestr (result->string node)]
                               [typestr (get-type-name type)])
-                          (print ", " typestr nodestr)
+                          (print ", " typestr " " nodestr)
                           )) (rest nodelist) (rest typelist))
           ))
       (println " )")
@@ -280,6 +283,37 @@
           #f
           temp)
    )))
+
+(define (emit-vardecl name type node)
+  (let* ([nodestr (result->string node)]
+         [typestr (get-type-name type)]
+         [local (make-label-result)]
+         [localstr (result->string local)])
+    (println "; variable declaration of " (symbol->string name))
+    (println localstr " = alloca " typestr ", align 8")
+    (println "store " typestr " " nodestr ", " typestr "* " localstr)
+    local
+  ))
+
+(define (emit-var varval node)
+  (let* ([nodestr (result->string node)]
+         [typestr (get-type-name (VarValue-type varval))]
+         [temp (make-temp-result)]
+         [tempstr (result->string temp)])
+    (println tempstr " = load " typestr ", " typestr "* " nodestr)
+    temp
+    ))
+
+(define (emit-assignexpr varval varnode exprnode)
+  (let* ([nodestr (result->string varnode)]
+         [typestr (get-type-name (VarValue-type varval))]
+         [exprnodestr (result->string exprnode)]
+         [temp (make-temp-result)]
+         [tempstr (result->string temp)])
+    (println ";Assignment")
+    (println "store " typestr " " exprnodestr ", " typestr "* " nodestr)
+    temp
+   ))
     
 
 (define (get-type-name nitype)

@@ -136,15 +136,17 @@
                                                      (log-typeerror "cannot assign peng to a variable if you don't declare its record type" ast)
                                                      (types:make-VoidType))
                                                    (let ([varval (types:make-VarValue t1)])
-                                                     (add-note ast 'type varval)
-                                                     (extend-env venv id varval)))]
+                                                     ;(add-note ast 'type varval)--max's trick
+                                                     (extend-env venv id varval)
+                                                     varval))]
                                 ; if it's a record type and the init value has a peng type, we're good to go!
                                 [(or (peng-match? dectype t1)
                                 ; otherwise, both types must match
                                      (types:type=? dectype t1))
                                  (let ([varval (types:make-VarValue dectype)])
-                                   (add-note ast 'type varval)
-                                   (extend-env venv id varval))]
+                                   ;(add-note ast 'type varval)-max's trick
+                                   (extend-env venv id varval)
+                                   varval)]
                                 [else
                                  (begin
                                    (log-typeerror "the declared type ~a, and the type of the expressions (~a) don't match" ast type t1)
