@@ -53,7 +53,10 @@
     
     ; integer literals
     [(NumExpr val) (numexpr->llvm ast val)]
-
+    ; bool values
+    [(BoolVal val) (boolval->llvm ast val)]
+    
+    ; string literals
     [(StringExpr val) (stringexpr->llvm ast val)]
 
     ; variable declarations!
@@ -73,6 +76,9 @@
 
     ; if expression/branching
     [(IfExpr _ _ _) (ifexpr->llvm ast)]
+
+    ;function declaration
+    [(FunDecl _ _ _ _ _) (fundecl->llvm ast)]
     
     [_ (error "Translation node " ast " not implemented yet!")]))        
 
@@ -80,6 +86,11 @@
 (define (numexpr->llvm node val)
   ; literal nums can go in registers
   (let ([result (emit-math 'add val "0")])
+    (add-note node 'result result)))
+
+;emits a bool literal
+(define (boolval->llvm node val)
+  (let ([result (emit-boolval val)])
     (add-note node 'result result)))
 
 ;emits a string
@@ -139,7 +150,64 @@
     ))
 
 ;emit if expression/branching
-;IfExpr (test true-branch false-branch)
-(define (ifexpr->llvm)
-  '()
-  )
+(define (ifexpr->llvm node)
+  (begin
+    (println " ")
+    (println ";if/then/else branch")
+    ;emit test branch
+    (ast->llvm (IfExpr-test node))
+    (let ([testres (get-note (IfExpr-test node) 'result)]
+          [L1 (make-label-result)]
+          [L2 (make-label-result)]
+          [L3 (make-label-result)])
+      (emit-test testres L1 L2)
+      ;test if false-branch exist
+      (if (equal? (IfExpr-false-branch node) '())
+          ;no else-branch
+          (begin
+            (emit-lable L1) ;L1
+            (ast->llvm (IfExpr-true-branch node))
+            (emit-branch L2)
+            (emit-lable L2) ;L2
+            );L2
+          ;has else-branch
+          (begin
+            ;L1
+            (emit-lable L1)
+            (ast->llvm (IfExpr-true-branch node))
+            (emit-branch L3)
+            ;L2
+            (emit-lable L2)
+            (ast->llvm (IfExpr-false-branch node))
+            (emit-branch L3)
+            ;L3 phi
+            (emit-lable L3)
+            (let* ([true-res (get-note (IfExpr-true-branch node) 'result)]
+                   [false-res (get-note (IfExpr-false-branch node) 'result)]
+                   [type (get-note (IfExpr-true-branch node) 'type)]
+                   [result (emit-ifphi type true-res L1 false-res L2)])
+              (add-note node 'result result)
+              )
+            ))
+    )
+    
+  ))
+
+;emit function declaration
+;(FunDecl name args rettype body next)
+(define (fundecl->llvm node)
+  (let ([name (FunDecl-name node)]
+        ;[args (FunDecl-args node)]
+        [body (FunDecl-body node)]
+        [next (FunDecl-next node)])
+    
+
+    (println " ")
+    (println ";Function body of :" (symbol->string name))
+    (for-each (λ (arg) (ast->llvm arg)) body)
+    
+    ;next field
+    (if (equal? next '())
+        '()
+        (fundecl->llvm next))
+  ))

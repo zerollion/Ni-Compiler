@@ -230,6 +230,16 @@
       ; return the result that was created
       result)))
 
+(define (emit-boolval val)
+  (let* ([result (make-temp-result)]
+         [resstr (result->string result)]
+         [tyname "i1 "])
+    (if (eq? val #t)
+        (println resstr " = add " tyname " 1, 0")
+        (println resstr " = add " tyname " 0, 0"))
+    result
+    ))
+
 (define (emit-literal-string val)
   (let([str (substring val 1 (sub1 (string-length val)))]
        [length (sub1 (string-length val))]
@@ -314,7 +324,43 @@
     (println "store " typestr " " exprnodestr ", " typestr "* " nodestr)
     temp
    ))
-    
+
+;if else then-----------------------------
+(define (emit-test testresult L1 L2)
+  (let ([resultstr (result->string testresult)]
+        [L1str (result->string L1)]
+        [L2str (result->string L2)])
+    (println "br i1 " resultstr ", label " L1str ", label " L2str)
+  ))
+
+(define (emit-lable lable)
+  (let* ([lablestr (result->string lable)]
+         [lstr (string-replace lablestr "%" "")])
+    (println " ")
+    (println lstr ":")
+  ))
+
+(define (emit-branch lable)
+  (println "br label " (result->string lable))
+  )
+
+(define (emit-ifphi type true-res L1 false-res L2)
+  (let* ([result (make-temp-result)]
+         [resstr (result->string result)]
+         [typestr (get-type-name type)]
+         [tstr (result->string true-res)]
+         [fstr (result->string false-res)]
+         [L1str (result->string L1)]
+         [L2str (result->string L2)])
+    (println resstr " = phi " typestr " [ " tstr ", " L1str " ], [ " fstr ", " L2str " ]")
+    result
+  ))
+;end if else then-------------------------------
+
+(define (emit-fundecl name args body)
+  (println " ")
+  (println ";Function declaration on :" (symbol->string name))
+  )
 
 (define (get-type-name nitype)
   (let ([ty (actual-type nitype)])
