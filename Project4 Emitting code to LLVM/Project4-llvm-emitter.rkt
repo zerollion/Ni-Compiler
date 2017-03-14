@@ -216,7 +216,7 @@
     (let ([resstr (result->string result)]
           [tyname "i64 "])
       (cond
-        [(not (and (symbol? mathsym) (or (string? v1) (Result? v1)) (or (string? v2) (Result? v2))))
+        [(not (and (mathsym? mathsym) (or (string? v1) (Result? v1)) (or (string? v2) (Result? v2))))
          (raise-arguments-error 'emit-math "mathsym should be a symbol and v1 and v2 should be Result (or string) types"
                                 "mathsym" mathsym
                                 "v1" v1
@@ -230,31 +230,84 @@
       ; return the result that was created
       result)))
 
+(define (boolsym? sym)
+  (and (symbol? sym) (or (eq? sym 'eq) (eq? sym 'lt) (eq? sym 'gt) (eq? sym 'ge) (eq? sym 'le) (eq? sym 'ne))))
+
+(define (emit-bool boolsym v1 v2 [result (make-temp-result)])
+  (let ([v1str (if (Result? v1) (result->string v1) v1)]
+        [v2str (if (Result? v2) (result->string v2) v2)])
+    (let ([resstr (result->string result)]
+          [tyname "i64 "])
+      (cond
+        [(not (and (boolsym? boolsym) (or (string? v1) (Result? v1)) (or (string? v2) (Result? v2))))
+         (raise-arguments-error 'emit-bool "boolsym should be a symbol and v1 and v2 should be Result (or string) types"
+                                "boolsym" boolsym
+                                "v1" v1
+                                "v2" v2)]
+        [(eq? boolsym 'eq) (println resstr " = icmp eq " tyname v1str ", " v2str)]
+        [(eq? boolsym 'lt) (println resstr " = icmp slt " tyname v1str ", " v2str)]
+        [(eq? boolsym 'gt) (println resstr " = icmp sgt " tyname v1str ", " v2str)]
+        [(eq? boolsym 'ge) (println resstr " = icmp sge " tyname v1str ", " v2str)]
+        [(eq? boolsym 'le) (println resstr " = icmp sle " tyname v1str ", " v2str)]
+        [(eq? boolsym 'ne) (println resstr " = icmp ne " tyname v1str ", " v2str)]
+        [else (raise-arguments-error 'emit-bool "boolsym must be 'eq, 'lt, 'gt, 'ge, 'le, or 'ne"
+                                     "boolsym" boolsym)])
+      ; return the result that was created
+      result)))
+
+(define (logicsym? sym)
+  (and (symbol? sym) (or (eq? sym 'and) (eq? sym 'or))))
+
+(define (emit-logic logicsym v1 v2 [result (make-temp-result)])
+  (let ([v1str (if (Result? v1) (result->string v1) v1)]
+        [v2str (if (Result? v2) (result->string v2) v2)])
+    (let ([resstr (result->string result)]
+          [tyname "i1 "])
+      (cond
+        [(not (and (logicsym? logicsym) (or (string? v1) (Result? v1)) (or (string? v2) (Result? v2))))
+         (raise-arguments-error 'emit-logic "logicsym should be a symbol and v1 and v2 should be Result (or string) types"
+                                "logicsym" logicsym
+                                "v1" v1
+                                "v2" v2)]
+        [(eq? logicsym 'and) (println resstr " = and " tyname v1str ", " v2str)]
+        [(eq? logicsym 'or)  (println resstr " = or " tyname v1str ", " v2str)]
+        [else (raise-arguments-error 'emit-logic "logicsym must be 'and/'or"
+                                     "logicsym" logicsym)])
+      ; return the result that was created
+      result)))
+
 (define (emit-boolval val)
   (let* ([result (make-temp-result)]
          [resstr (result->string result)]
          [tyname "i1 "])
     (if (eq? val #t)
-        (println resstr " = add " tyname " 1, 0")
-        (println resstr " = add " tyname " 0, 0"))
+        (println resstr " = add " tyname "1, 0")
+        (println resstr " = add " tyname "0, 0"))
     result
     ))
 
 (define (emit-literal-string val)
-  (let([str (substring val 1 (sub1 (string-length val)))]
-       [length (sub1 (string-length val))]
-       [strval (make-global-result)]
-       [struct (make-global-result)]
-       ; replace every "\n" with "\0A" for newline in LLVM
-       [llvmstr (string-replace (substring val 1 (sub1 (string-length val))) "\\n" "\\0A")])
+  (let*([str (substring val 1 (sub1 (string-length val)))]
+        [length (sub1 (string-length val))]
+        [strval (make-global-result)]
+        [struct (make-global-result)]
+        ; replace every "\n" with "\0A" for newline in LLVM
+        [llvmstr (string-replace (substring val 1 (sub1 (string-length val))) "\\n" "\\0A")]
+        ; we multiply the diff of the new string length minus the old one
+        ; (after subbing 2 because of quotes on the old one) because
+        ; "\n" has a length of 2, according to racket, while "\0A" has a
+        ; length of 3, thus we need to remove 2 characters for every
+        ; "\n" we replaced to get the right string length according to llvm
+        [lenval (add1 (- (string-length llvmstr)
+                        (* 2 (- (string-length llvmstr) ( - (string-length val) 2)))))])
     (begin-global-defn)
     (let ([L1 (result->string strval)]
           [L2 (result->string struct)]
           [strres (string-append " c\"" llvmstr "\\00\"")]
-          [type1 (string-append "[" (number->string length) " x i8]")]
+          [type1 (string-append "[" (number->string lenval) " x i8]")]
           [type2 "%struct.string"])
       (println L1 " = global " type1 strres ", align 1")
-      (println L2 " = global " type2 "{ i64 " (number->string (sub1 length))
+      (println L2 " = global " type2 "{ i64 " (number->string (sub1 lenval))
                ", i8* getelementptr inbounds (" type1 ", " type1 "* " L1 ", i32 0, i32 0) }, align 8")
       (end-global-defn)
       struct
@@ -262,16 +315,22 @@
     ))
 
 
-(define (emit-funcall name nodelist typelist rettype)
+(define (emit-funcall name nodelist typelist rettype funty)
   (begin
     (println ";Function Call on:" (symbol->string name))
     (let* ([namestr (symbol->string name)]
            [retstr (get-type-name rettype)]
            [temp (make-temp-result)]
-           [tempstr (result->string temp)])
-      (if (equal? retstr "void")
-          (print "call void @" namestr "( ")
-          (print tempstr " = call " retstr " @" namestr "( "))
+           [tempstr (result->string temp)]
+           [register (FunValue-result funty)])
+           ;[namestring (if (equal? register '()) namestr (result->string register))])
+      (if (equal?  register '())
+          (if (equal? retstr "void")
+              (print "call void @" namestr "( ")
+              (print tempstr " = call " retstr " @" namestr "( "))
+          (if (equal? retstr "void")
+              (print "call void " (result->string register) "( ")
+              (print tempstr " = call " retstr " " (result->string register) "( ")))
       
       (if (empty? nodelist)
           (print "")
@@ -310,9 +369,15 @@
          [typestr (get-type-name (VarValue-type varval))]
          [temp (make-temp-result)]
          [tempstr (result->string temp)])
-    (println tempstr " = load " typestr ", " typestr "* " nodestr)
-    temp
+    (if (load? node (VarValue-type varval))
+        (begin
+          (println tempstr " = load " typestr ", " typestr "* " nodestr)
+          temp)
+        node)
     ))
+
+(define (load? result type)
+  (or (global? result) (in-frame? result) (StringType? type) (ArrayType? type)))
 
 (define (emit-assignexpr varval varnode exprnode)
   (let* ([nodestr (result->string varnode)]
@@ -357,10 +422,46 @@
   ))
 ;end if else then-------------------------------
 
-(define (emit-fundecl name args body)
-  (println " ")
-  (println ";Function declaration on :" (symbol->string name))
-  )
+(define (emit-fundecl name funty  nodelist typelist)
+  (let* ([func (make-global-result)]
+         [funstr (result->string func)]
+         [type (get-type-name (FunValue-return-type funty))])
+    ;add the result to FunValue
+    (set-FunValue-result! funty func)
+    (println " ")
+    (println ";Function declaration on :" (symbol->string name))
+    (print "define " type " " funstr "(")
+    ;arguments
+    (if (empty? nodelist)
+        (print "")
+        (begin
+          ;first
+          (let ([nodestr (result->string (first nodelist))]
+                [typestr (get-type-name (first typelist))])
+            (print typestr " " nodestr)
+            )
+          ;rest
+          (for-each (λ (node type)
+                      (let ([nodestr (result->string node)]
+                            [typestr (get-type-name type)])
+                        (print ", " typestr " " nodestr)
+                        )) (rest nodelist) (rest typelist))
+          ))
+    (println " ) {")
+    func
+  ))
+
+(define (emit-fundecl-body retres rettype)
+  (begin
+    (if (or (eq? retres '()) (eq? retres #f))
+        (println "ret void")
+        (let ([ret (result->string retres)]
+              [type (get-type-name rettype)])
+          (println "ret " type " " ret)
+      ))
+    (println "}")
+    (println " ")
+    ))
 
 (define (get-type-name nitype)
   (let ([ty (actual-type nitype)])

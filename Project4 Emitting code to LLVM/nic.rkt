@@ -119,7 +119,7 @@
 
 (define (compile-llvm filename)
   (printf "...generating executable called: ~a~n" filename)
-  (let ([cmd (string-append "cc " filename ".ll NiStdLib.c -o " filename)])
+  (let ([cmd (string-append "clang " filename ".ll NiStdLib.c -o " filename)])
     (printf "executing: ~a to compile everything together!~n" cmd)
     (system cmd)
     (printf "done!")))

@@ -16,6 +16,10 @@ struct array
   long *arr;
 };
 
+long stringCompare(struct string *str1, struct string *str2)
+{
+	return (long)strcmp(str1->str, str2->str);
+}
 
 struct array *makeArray(long numElements)
 {

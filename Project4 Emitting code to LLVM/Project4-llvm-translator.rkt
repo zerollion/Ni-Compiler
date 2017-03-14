@@ -59,6 +59,15 @@
     ; string literals
     [(StringExpr val) (stringexpr->llvm ast val)]
 
+    ; math expression
+    [(MathExpr expr1 sym expr2) (mathexpr->llvm ast sym expr1 expr2)]
+
+    ; bool expression
+    [(BoolExpr expr1 sym expr2) (boolexpr->llvm ast sym expr1 expr2)]
+
+    ; logic expression
+    [(LogicExpr expr1 sym expr2) (logicexpr->llvm ast sym expr1 expr2)]
+
     ; variable declarations!
     [(VarDecl _ _ _) (vardecl->llvm ast)]
     
@@ -78,7 +87,7 @@
     [(IfExpr _ _ _) (ifexpr->llvm ast)]
 
     ;function declaration
-    [(FunDecl _ _ _ _ _) (fundecl->llvm ast)]
+    [(FunDecl name args rettype body next) (fundecl->llvm ast name args rettype body next)]
     
     [_ (error "Translation node " ast " not implemented yet!")]))        
 
@@ -97,6 +106,41 @@
 (define (stringexpr->llvm node val)
   (let ([result (emit-literal-string val)])
     (add-note node 'result result)))
+
+;emit a math expression
+(define (mathexpr->llvm node sym expr1 expr2)
+  (let* ([t1 (ast->llvm expr1)]
+         [t2 (ast->llvm expr2)]
+         [r1 (get-note expr1 'result)]
+         [r2 (get-note expr2 'result)])
+    (let ([result (cond
+                    [(equal? sym '+) (emit-math 'add r1 r2)]
+                    [(equal? sym '-) (emit-math 'sub r1 r2)]
+                    [(equal? sym '*) (emit-math 'mul r1 r2)]
+                    [(equal? sym '/) (emit-math 'div r1 r2)]
+                    )])
+      (add-note node 'result result)
+      )))
+
+;emit a boolean expression
+(define (boolexpr->llvm node sym expr1 expr2)
+  (let* ([t1 (ast->llvm expr1)]
+         [t2 (ast->llvm expr2)]
+         [r1 (get-note expr1 'result)]
+         [r2 (get-note expr2 'result)]
+         [result (emit-bool sym r1 r2)])
+    (add-note node 'result result)
+    ))
+
+;emit a logic expression
+(define (logicexpr->llvm node sym expr1 expr2)
+  (let* ([t1 (ast->llvm expr1)]
+         [t2 (ast->llvm expr2)]
+         [r1 (get-note expr1 'result)]
+         [r2 (get-note expr2 'result)]
+         [result (emit-logic sym r1 r2)])
+    (add-note node 'result result)
+    ))
 
 ;emits variable declaration
 (define (vardecl->llvm node)
@@ -125,7 +169,8 @@
     (for-each (λ (arg) (ast->llvm arg)) listarg)
     (let* ([nodelist (map (λ (arg) (get-note arg 'result)) listarg)]
            [typelist (map (λ (arg) (get-note arg 'type)) listarg)]
-           [result (emit-funcall name nodelist typelist rettype)])
+           [funty (get-note node 'funval)]
+           [result (emit-funcall name nodelist typelist rettype funty)])
       (add-note node 'result result)
     )))
 
@@ -135,7 +180,7 @@
         [exprs (LetExpr-exprs node)])
     (for-each (λ (arg) (ast->llvm arg)) decs)
     (for-each (λ (arg) (ast->llvm arg)) exprs)
-    (let* ([result (foldl (λ (arg default) (get-note arg 'result)) '() exprs)])
+    (let ([result (foldl (λ (arg default) (get-note arg 'result)) '() exprs)])
       (add-note node 'result result)
       )))
 
@@ -195,16 +240,23 @@
 
 ;emit function declaration
 ;(FunDecl name args rettype body next)
-(define (fundecl->llvm node)
-  (let ([name (FunDecl-name node)]
-        ;[args (FunDecl-args node)]
-        [body (FunDecl-body node)]
-        [next (FunDecl-next node)])
+(define (fundecl->llvm node name args rettype body next)
+  (let* ([funty (get-note node 'funvalue)]
+         [varvalues (t:FunValue-varvalues funty)]
+         [retype (t:FunValue-return-type funty)])
+    ;make temp result for each argument
+    (for-each (λ (arg) (t:set-VarValue-result! arg (make-temp-result))) varvalues)
+    (let ([typelist (map (λ (arg) (t:VarValue-type arg)) varvalues)]
+          [nodelist (map (λ (arg) (t:VarValue-result arg)) varvalues)])
+      (emit-fundecl name funty nodelist typelist))
     
-
+    ;body of function
     (println " ")
-    (println ";Function body of :" (symbol->string name))
-    (for-each (λ (arg) (ast->llvm arg)) body)
+    (println ";Function body")
+    (ast->llvm body)
+    (let* ([retres (get-note body 'result)]
+           [rettype (get-note body 'type)])
+      (emit-fundecl-body retres rettype))
     
     ;next field
     (if (equal? next '())

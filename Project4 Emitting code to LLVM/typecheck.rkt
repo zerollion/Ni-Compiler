@@ -441,17 +441,22 @@
    (λ (fun)
      (match fun
        [(FunDecl name args rettype body _)     
-        (let ([tenv1 (push-scope tenv)]
-              [venv1 (push-scope venv)]
-              [funty (apply-env venv name)])
-          (for-each (λ (param)
+        (let* ([tenv1 (push-scope tenv)]
+               [venv1 (push-scope venv)]
+               [funty (apply-env venv name)]
+               [varvaluelists (map (λ (param) (types:make-VarValue (types:NiType-actual param))) (types:FunValue-parameters funty))])
+          (for-each (λ (param varval)
                       ; now extend the new environment with VarValues of the parameters of the function
-                      (extend-env venv1 (types:NameTypePair-name param) (types:make-VarValue (types:NiType-actual param)))) (types:FunValue-parameters funty))
+                      (extend-env venv1 (types:NameTypePair-name param) varval)) (types:FunValue-parameters funty) varvaluelists)
           (let ([bodyty (typecheck body tenv1 venv1 #f)]
                 [retty (types:FunValue-return-type funty)])
             (cond
               [(not (types:type=? (types:FunValue-return-type funty) bodyty))
-               (log-typeerror "Specified function return type, ~a, does not match body return type, ~a" fun (types:FunValue-return-type funty) bodyty)])))]
+               (log-typeerror "Specified function return type, ~a, does not match body return type, ~a" fun (types:FunValue-return-type funty) bodyty)]))
+          ;-------------edit to get var values-------------
+          (types:set-FunValue-varvalues! funty varvaluelists)
+          (add-note fun 'funvalue funty)
+          )]
        [_ (error "Compiler error: expected FunDecl")])) decl))))
                     
             

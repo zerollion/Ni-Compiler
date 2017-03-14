@@ -95,7 +95,11 @@
 ; as with records, we need something for parameters,
 ; so this will be stored as a list of NameTypePair structs
 ; and wouldn't putting its name in here be so great???
-(struct FunValue (parameters return-type) #:transparent)
+(struct FunValue (parameters return-type
+                             [varvalues #:auto #:mutable]
+                             [result #:auto #:mutable])
+  #:auto-value '()
+  #:transparent)
 
 (define (bind-nametype! nametype type)
   (set-NiType-actual! nametype type))
