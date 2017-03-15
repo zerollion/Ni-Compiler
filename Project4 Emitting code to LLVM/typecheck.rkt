@@ -34,6 +34,9 @@
                                                       (types:NameTypePair (types:make-IntType) 'n)) (types:make-StringType)))
     (extend-env venv 'concat (types:FunValue (list (types:NameTypePair (types:make-StringType) 's1)
                                                    (types:NameTypePair (types:make-StringType) 's2)) (types:make-StringType)))
+    ;string compare
+    (extend-env venv 'stringCompare (types:FunValue (list (types:NameTypePair (types:make-StringType) 's1)
+                                                          (types:NameTypePair (types:make-StringType) 's2)) (types:make-IntType)))
     (extend-env venv 'not (types:FunValue (list (types:NameTypePair (types:make-BoolType) 'i)) (types:make-BoolType)))
     (extend-env venv 'Exit (types:FunValue (list (types:NameTypePair (types:make-IntType) 'i)) (types:make-VoidType)))
     venv))

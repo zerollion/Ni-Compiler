@@ -233,27 +233,39 @@
 (define (boolsym? sym)
   (and (symbol? sym) (or (eq? sym 'eq) (eq? sym 'lt) (eq? sym 'gt) (eq? sym 'ge) (eq? sym 'le) (eq? sym 'ne))))
 
-(define (emit-bool boolsym v1 v2 [result (make-temp-result)])
-  (let ([v1str (if (Result? v1) (result->string v1) v1)]
-        [v2str (if (Result? v2) (result->string v2) v2)])
-    (let ([resstr (result->string result)]
-          [tyname "i64 "])
-      (cond
-        [(not (and (boolsym? boolsym) (or (string? v1) (Result? v1)) (or (string? v2) (Result? v2))))
-         (raise-arguments-error 'emit-bool "boolsym should be a symbol and v1 and v2 should be Result (or string) types"
-                                "boolsym" boolsym
-                                "v1" v1
-                                "v2" v2)]
-        [(eq? boolsym 'eq) (println resstr " = icmp eq " tyname v1str ", " v2str)]
-        [(eq? boolsym 'lt) (println resstr " = icmp slt " tyname v1str ", " v2str)]
-        [(eq? boolsym 'gt) (println resstr " = icmp sgt " tyname v1str ", " v2str)]
-        [(eq? boolsym 'ge) (println resstr " = icmp sge " tyname v1str ", " v2str)]
-        [(eq? boolsym 'le) (println resstr " = icmp sle " tyname v1str ", " v2str)]
-        [(eq? boolsym 'ne) (println resstr " = icmp ne " tyname v1str ", " v2str)]
-        [else (raise-arguments-error 'emit-bool "boolsym must be 'eq, 'lt, 'gt, 'ge, 'le, or 'ne"
-                                     "boolsym" boolsym)])
-      ; return the result that was created
-      result)))
+(define (emit-bool boolsym v1 v2 type [result (make-temp-result)])
+  (cond
+    [(IntType? type)
+     (let ([v1str (if (Result? v1) (result->string v1) v1)]
+           [v2str (if (Result? v2) (result->string v2) v2)])
+       (let ([resstr (result->string result)]
+             [tyname "i64 "])
+         (cond
+           [(not (and (boolsym? boolsym) (or (string? v1) (Result? v1)) (or (string? v2) (Result? v2))))
+            (raise-arguments-error 'emit-bool "boolsym should be a symbol and v1 and v2 should be Result (or string) types"
+                                   "boolsym" boolsym
+                                   "v1" v1
+                                   "v2" v2)]
+           [(eq? boolsym 'eq) (println resstr " = icmp eq " tyname v1str ", " v2str)]
+           [(eq? boolsym 'lt) (println resstr " = icmp slt " tyname v1str ", " v2str)]
+           [(eq? boolsym 'gt) (println resstr " = icmp sgt " tyname v1str ", " v2str)]
+           [(eq? boolsym 'ge) (println resstr " = icmp sge " tyname v1str ", " v2str)]
+           [(eq? boolsym 'le) (println resstr " = icmp sle " tyname v1str ", " v2str)]
+           [(eq? boolsym 'ne) (println resstr " = icmp ne " tyname v1str ", " v2str)]
+           [else (raise-arguments-error 'emit-bool "boolsym must be 'eq, 'lt, 'gt, 'ge, 'le, or 'ne"
+                                        "boolsym" boolsym)])
+         ; return the result that was created
+         result))]
+    
+    [(StringType? type)
+     (let ([result (make-temp-result)]
+           [resstr (result->string result)])
+       (println ";string comparism, calling stringCompare()")
+       (println resstr " = call i64 @stringCompare( "
+                (get-type-name type) " " (result->string v1) ", "
+                (get-type-name type) " " (result->string v2) " )")
+       result)]
+    ))
 
 (define (logicsym? sym)
   (and (symbol? sym) (or (eq? sym 'and) (eq? sym 'or))))

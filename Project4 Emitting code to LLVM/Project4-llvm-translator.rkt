@@ -131,7 +131,8 @@
          [t2 (ast->llvm expr2)]
          [r1 (get-note expr1 'result)]
          [r2 (get-note expr2 'result)]
-         [result (emit-bool sym r1 r2)])
+         [r2type (get-note expr2 'type)]
+         [result (emit-bool sym r1 r2 r2type)])
     (add-note node 'result result)
     ))
 
