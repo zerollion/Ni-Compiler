@@ -88,6 +88,9 @@
 
     ;function declaration
     [(FunDecl name args rettype body next) (fundecl->llvm ast name args rettype body next)]
+
+    ;while expression
+    [(WhileExpr test body) (while->llvm ast test body)]
     
     [_ (error "Translation node " ast " not implemented yet!")]))        
 
@@ -262,4 +265,30 @@
     (if (equal? next '())
         '()
         (fundecl->llvm next))
+  ))
+
+;emit a while expression
+(define (while->llvm node test body)
+  (let ([L1 (make-label-result)]
+        [L2 (make-label-result)]
+        [L3 (make-label-result)])
+    (println " ")
+    (println ";while loop:")
+    (emit-branch L1)
+    (println " ")
+    (println ";while condition:")
+    (emit-lable L1)
+    (ast->llvm test)
+    (let ([testres (get-note test 'result)])
+      (emit-test testres L2 L3))
+    (println " ")
+    (println ";while body:")
+    (emit-lable L2)
+    (ast->llvm body)
+    (emit-branch L1)
+    (println " ")
+    (println ";while exit:")
+    (emit-lable L3)
+    (let ([result (foldl (λ (arg default) (get-note arg 'result)) '() body)])
+      (add-note node 'result result))
   ))
