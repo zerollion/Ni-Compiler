@@ -16,3 +16,5 @@ Project3 Type Cheking/tests/
 *.dot
 *.png
 typecheck-tests.rkt
+*.ni
+*.ll

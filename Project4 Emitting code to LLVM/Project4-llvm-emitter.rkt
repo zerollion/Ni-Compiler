@@ -428,6 +428,7 @@
          [type (get-type-name (FunValue-return-type funty))])
     ;add the result to FunValue
     (set-FunValue-result! funty func)
+    (begin-fun-defn)
     (println " ")
     (println ";Function declaration on :" (symbol->string name))
     (print "define " type " " funstr "(")
@@ -461,6 +462,7 @@
       ))
     (println "}")
     (println " ")
+    (end-fun-defn)
     ))
 
 (define (get-type-name nitype)
