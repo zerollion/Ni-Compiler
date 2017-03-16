@@ -89,8 +89,11 @@
     ;function declaration
     [(FunDecl name args rettype body next) (fundecl->llvm ast name args rettype body next)]
 
-    ;while expression
+    ;while loop
     [(WhileExpr test body) (while->llvm ast test body)]
+
+    ;with loop
+    [(WithExpr idname fromexpr toexpr body) (with->llvm ast idname fromexpr toexpr body)]
     
     [_ (error "Translation node " ast " not implemented yet!")]))        
 
@@ -214,23 +217,23 @@
       (if (equal? (IfExpr-false-branch node) '())
           ;no else-branch
           (begin
-            (emit-lable L1) ;L1
+            (emit-label L1) ;L1
             (ast->llvm (IfExpr-true-branch node))
             (emit-branch L2)
-            (emit-lable L2) ;L2
+            (emit-label L2) ;L2
             );L2
           ;has else-branch
           (begin
             ;L1
-            (emit-lable L1)
+            (emit-label L1)
             (ast->llvm (IfExpr-true-branch node))
             (emit-branch L3)
             ;L2
-            (emit-lable L2)
+            (emit-label L2)
             (ast->llvm (IfExpr-false-branch node))
             (emit-branch L3)
             ;L3 phi
-            (emit-lable L3)
+            (emit-label L3)
             (let* ([true-res (get-note (IfExpr-true-branch node) 'result)]
                    [false-res (get-note (IfExpr-false-branch node) 'result)]
                    [type (get-note (IfExpr-true-branch node) 'type)]
@@ -278,18 +281,71 @@
     (emit-branch L1)
     (println " ")
     (println ";while condition:")
-    (emit-lable L1)
+    (emit-label L1)
     (ast->llvm test)
     (let ([testres (get-note test 'result)])
       (emit-test testres L2 L3))
     (println " ")
     (println ";while body:")
-    (emit-lable L2)
+    (emit-label L2)
     (ast->llvm body)
     (emit-branch L1)
     (println " ")
     (println ";while exit:")
-    (emit-lable L3)
+    (emit-label L3)
+    
+    (let ([result (foldl (λ (arg default) (get-note arg 'result)) '() body)])
+      (add-note node 'result result))
+  ))
+
+;emit with loop
+(define (with->llvm node idname fromexpr toexpr body)
+  (let* ([i (make-frame-result)]
+         [iname (result->string i)]
+         [L1 (make-label-result)]
+         [L2 (make-label-result)]
+         [L3 (make-label-result)]
+         [varval (get-note node 'varvalue)])
+    (t:set-VarValue-result! varval i)
+    (println " ")
+    (println ";with loop:")
+    (println ";with loop initializer")
+    (ast->llvm fromexpr)
+    (ast->llvm toexpr)
+    (let* ([from (get-note fromexpr 'result)]
+           [fromi (result->string from)]
+           [to (get-note toexpr 'result)]
+           [toi (result->string to)])
+      (println iname " = alloca i64, align 8")
+      (println "store i64 " (result->string from) ", i64* " iname)
+      (emit-branch L1)
+      (println " ")
+      (println ";with loop condition")
+      (emit-label L1)
+      (let* ([temp1 (make-temp-result)]
+             [temp1str (result->string temp1)]
+             [temp2 (make-temp-result)]
+             [temp2str (result->string temp2)]
+             [temp3 (make-temp-result)]
+             [temp3str (result->string temp3)])
+        (println temp1str " = load i64, i64* " iname)
+        (println temp2str " = icmp sle i64 " temp1str ", " toi)
+        (emit-test temp2 L2 L3)
+        (println " ")
+        (println ";with loop body")
+        (emit-label L2)
+        (ast->llvm body)
+        (println " ")
+        (println ";increment counter")
+        (println temp3str " = add i64 1, " temp1str)
+        (println "store i64 " temp3str ", i64* " iname)
+        (emit-branch L1)
+        )
+      )
+    (println " ")
+    (println ";with exit:")
+    (emit-label L3)
+    
     (let ([result (foldl (λ (arg default) (get-note arg 'result)) '() body)])
       (add-note node 'result result))
   ))

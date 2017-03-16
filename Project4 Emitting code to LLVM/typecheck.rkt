@@ -371,6 +371,7 @@
        (begin
          (types:set-VarValue-read-only?! counterty #t)
          (extend-env venv1 idname counterty)
+         (add-note node 'varvalue counterty);-------------------
          (let ([bodyty (typecheck body tenv venv1 #t)])
            (cond
              [(not (types:type=? (types:make-VoidType) bodyty))

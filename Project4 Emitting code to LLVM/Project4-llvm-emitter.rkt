@@ -410,15 +410,15 @@
     (println "br i1 " resultstr ", label " L1str ", label " L2str)
   ))
 
-(define (emit-lable lable)
-  (let* ([lablestr (result->string lable)]
-         [lstr (string-replace lablestr "%" "")])
+(define (emit-label label)
+  (let* ([labelstr (result->string label)]
+         [lstr (string-replace labelstr "%" "")])
     (println " ")
     (println lstr ":")
   ))
 
-(define (emit-branch lable)
-  (println "br label " (result->string lable))
+(define (emit-branch label)
+  (println "br label " (result->string label))
   )
 
 (define (emit-ifphi type true-res L1 false-res L2)
